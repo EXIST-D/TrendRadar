@@ -394,6 +394,85 @@ presets:
 #     晚间汇总 19:00-21:00：推送 ✓ | 分析 ✓ | daily
 #     其余时间走默认配置（静默采集）
 
+
+  # ───────────────────────────────────────────────────────────
+  # Personal - 三次日报 + 周日 GitHub 趋势专场
+  #
+  # 北京时间：
+  # - 08:30 早间速览：AI / 科技 / 开源主线
+  # - 12:30 午间更新：补充科技动态与高质量文化兴趣
+  # - 21:30 晚间总结：当日汇总 + AI 分析
+  # - 周日 18:30 GitHub 专场：单独使用 github_weekly.txt 兴趣文件
+  # ───────────────────────────────────────────────────────────
+  personal_three_plus_github:
+    name: "个人三次推送 + GitHub 周趋势"
+    description: "每天早中晚三次推送，晚上做 AI 日总结，周日增加 GitHub 趋势专场。"
+
+    default:
+      collect: true
+      analyze: false
+      ai_mode: "current"
+      push: false
+      report_mode: "current"
+      filter_method: "ai"
+      once:
+        analyze: true
+        push: true
+
+    periods:
+      morning_brief:
+        name: "早间科技速览"
+        start: "08:00"
+        end: "09:00"
+        push: true
+        analyze: false
+        report_mode: "current"
+        ai_mode: "current"
+
+      midday_update:
+        name: "午间动态更新"
+        start: "12:00"
+        end: "13:00"
+        push: true
+        analyze: false
+        report_mode: "current"
+        ai_mode: "current"
+
+      github_weekly:
+        name: "GitHub 周趋势专场"
+        start: "18:00"
+        end: "19:00"
+        push: true
+        analyze: true
+        report_mode: "daily"
+        ai_mode: "daily"
+        interests_file: "github_weekly.txt"
+
+      evening_summary:
+        name: "晚间本日总结"
+        start: "21:00"
+        end: "22:00"
+        push: true
+        analyze: true
+        report_mode: "daily"
+        ai_mode: "daily"
+
+    day_plans:
+      normal_day:
+        periods: ["morning_brief", "midday_update", "evening_summary"]
+      sunday:
+        periods: ["morning_brief", "midday_update", "github_weekly", "evening_summary"]
+
+    week_map:
+      1: "normal_day"
+      2: "normal_day"
+      3: "normal_day"
+      4: "normal_day"
+      5: "normal_day"
+      6: "normal_day"
+      7: "sunday"
+
+
 custom:
   name: "自定义"
   description: "完全自由定义时间段、日计划和周映射。"
