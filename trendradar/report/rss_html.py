@@ -347,7 +347,10 @@ def render_rss_html_content(
                     </div>"""
 
         for item in items:
-            escaped_title = html_escape(item.get("title", ""))
+            raw_title = item.get("title", "")
+            if not raw_title or not raw_title.strip():
+                raw_title = item.get("url", "") or item.get("feed_name", "")
+            escaped_title = html_escape(raw_title)
             url = item.get("url", "")
             published_at = item.get("published_at", "")
             author = item.get("author", "")

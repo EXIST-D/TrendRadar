@@ -246,11 +246,11 @@ class Scheduler:
             是否在范围内
         """
         if start <= end:
-            # 正常范围，如 08:00-09:00
-            return start <= now_hhmm <= end
+            # 正常范围，如 08:00-09:00（半开区间 [start, end)）
+            return start <= now_hhmm < end
         else:
-            # 跨日范围，如 22:00-07:00
-            return now_hhmm >= start or now_hhmm <= end
+            # 跨日范围，如 22:00-07:00（半开区间 [start, end)）
+            return now_hhmm >= start or now_hhmm < end
 
     def _merge_with_default(self, period_key: Optional[str]) -> Dict[str, Any]:
         """合并默认配置和时间段配置"""
@@ -408,16 +408,16 @@ class Scheduler:
             if s <= e:
                 return [(s, e)]
             else:
-                # 跨日：拆分为 [start, 23:59] 和 [00:00, end]
-                return [(s, 24 * 60 - 1), (0, e)]
+                # 跨日：拆分为 [start, 24:00) 和 [00:00, end)
+                return [(s, 24 * 60), (0, e)]
 
         segs1 = expand_range(s1, e1)
         segs2 = expand_range(s2, e2)
 
         for a_start, a_end in segs1:
             for b_start, b_end in segs2:
-                # 两个区间有重叠的条件
-                if a_start <= b_end and b_start <= a_end:
+                # 两个半开区间有重叠的条件
+                if a_start < b_end and b_start < a_end:
                     return True
         return False
 

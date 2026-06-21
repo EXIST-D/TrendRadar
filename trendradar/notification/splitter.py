@@ -11,6 +11,113 @@ from typing import Dict, List, Optional, Callable
 from trendradar.report.formatter import format_title_for_platform
 from trendradar.report.helpers import format_rank_display
 from trendradar.utils.time import DEFAULT_TIMEZONE, format_iso_time_friendly, convert_time_for_display
+from trendradar.notification.batch import truncate_at_line_boundary
+
+
+# === 分批安全辅助函数 ===
+
+def _split_content_by_lines(
+    content: str, footer: str, max_bytes: int, base_header: str
+) -> List[str]:
+    """将超长内容按行边界拆分成多个完整批次（每个批次带 footer）
+
+    不会丢弃任何内容，溢出部分自动分配到后续批次。
+
+    Args:
+        content: 正文内容（不含 footer，可能含 base_header）
+        footer: 尾部内容（更新时间等）
+        max_bytes: 单批次最大字节数
+        base_header: 后续批次的头部
+
+    Returns:
+        完整批次列表（每个元素 = 正文 + footer，大小 ≤ max_bytes）
+    """
+    footer_size = len(footer.encode("utf-8"))
+    result_batches = []
+    lines = content.split("\n")
+
+    current = ""
+    for line in lines:
+        candidate = current + line + "\n"
+        if len(candidate.encode("utf-8")) + footer_size > max_bytes and current.strip():
+            result_batches.append(current + footer)
+            current = base_header + line + "\n"
+        else:
+            current = candidate
+
+    if current.strip():
+        result_batches.append(current + footer)
+
+    return result_batches
+
+
+def _safe_append_batch(
+    batches: List[str], content: str, footer: str, max_bytes: int,
+    base_header: str = ""
+) -> None:
+    """安全追加批次，超限时按行拆分成多个批次（不丢弃内容）
+
+    Args:
+        batches: 批次列表（原地修改）
+        content: 正文内容（不含 footer）
+        footer: 尾部内容（更新时间等）
+        max_bytes: 最大字节数
+        base_header: 溢出时后续批次的头部
+    """
+    full = content + footer
+    if len(full.encode("utf-8")) <= max_bytes:
+        batches.append(full)
+        return
+
+    split_batches = _split_content_by_lines(content, footer, max_bytes, base_header)
+    if split_batches:
+        batches.extend(split_batches)
+    else:
+        # 极端情况：单行就超限，强制截断
+        batches.append(truncate_at_line_boundary(full, max_bytes))
+
+
+def _safe_new_batch(
+    new_content: str, footer: str, max_bytes: int, base_header: str,
+    batches: List[str] = None
+) -> str:
+    """安全创建新批次，超限时将溢出内容拆分到 batches 中，返回最后一段作为 current_batch
+
+    Args:
+        new_content: 新批次完整内容（含 base_header + section_header + ...）
+        footer: 尾部内容
+        max_bytes: 最大字节数
+        base_header: 基础头部
+        batches: 批次列表，溢出部分追加到此（可选）
+
+    Returns:
+        可安全继续追加内容的 current_batch（大小 + footer ≤ max_bytes）
+    """
+    if len((new_content + footer).encode("utf-8")) <= max_bytes:
+        return new_content
+
+    if batches is None:
+        # 无法拆分到 batches，退回行边界截断
+        footer_size = len(footer.encode("utf-8"))
+        available = max_bytes - footer_size
+        header_size = len(base_header.encode("utf-8"))
+        if available <= header_size:
+            return base_header
+        return truncate_at_line_boundary(new_content, available)
+
+    # 拆分：前面的部分存入 batches，最后一段作为 current_batch 返回
+    split_batches = _split_content_by_lines(new_content, footer, max_bytes, base_header)
+    if len(split_batches) <= 1:
+        # 无法再拆，直接返回（由后续 _safe_append_batch 兜底）
+        return new_content
+
+    # 前 N-1 个批次存入 batches
+    batches.extend(split_batches[:-1])
+    # 最后一个批次去掉 footer 作为 current_batch（后续还会追加内容）
+    last = split_batches[-1]
+    if last.endswith(footer):
+        return last[: -len(footer)]
+    return last
 
 
 # 默认批次大小配置
@@ -104,71 +211,99 @@ def split_content_into_batches(
 
     # 构建头部信息
     base_header = ""
-    
-    # 准备 AI 分析统计行（如果存在）
-    ai_stats_line = ""
-    if ai_stats and ai_stats.get("analyzed_news", 0) > 0:
-        analyzed_news = ai_stats.get("analyzed_news", 0)
-        total_news = ai_stats.get("total_news", 0)
-        ai_mode = ai_stats.get("ai_mode", "")
 
-        # 构建分析数显示：如果被截断则显示 "实际分析数/总可分析数"
-        if total_news > analyzed_news:
-            news_display = f"{analyzed_news}/{total_news}"
-        else:
-            news_display = str(analyzed_news)
-
-        # 如果 AI 模式与推送模式不同，显示模式标识
-        mode_suffix = ""
-        if ai_mode and ai_mode != mode:
-            mode_map = {
-                "daily": "全天汇总",
-                "current": "当前榜单",
-                "incremental": "增量分析"
-            }
-            mode_label = mode_map.get(ai_mode, ai_mode)
-            mode_suffix = f" ({mode_label})"
-
-        if format_type in ("wework", "bark", "ntfy", "feishu", "dingtalk"):
-            ai_stats_line = f"**AI 分析数：** {news_display}{mode_suffix}\n"
-        elif format_type == "slack":
-            ai_stats_line = f"*AI 分析数：* {news_display}{mode_suffix}\n"
-        elif format_type == "telegram":
-            ai_stats_line = f"AI 分析数： {news_display}{mode_suffix}\n"
-
-    # 构建统一的头部（总是显示总新闻数、时间和类型）
-    if format_type in ("wework", "bark"):
-        base_header = f"**总新闻数：** {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"**时间：** {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"**类型：** {report_type}\n\n"
+    # 格式化粗体标记
+    if format_type == "slack":
+        b_s, b_e = "*", "*"
     elif format_type == "telegram":
-        base_header = f"总新闻数： {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"时间： {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"类型： {report_type}\n\n"
-    elif format_type == "ntfy":
-        base_header = f"**总新闻数：** {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"**时间：** {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"**类型：** {report_type}\n\n"
-    elif format_type == "feishu":
-        base_header = f"**总新闻数：** {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"**时间：** {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"**类型：** {report_type}\n\n"
-        base_header += "---\n\n"
-    elif format_type == "dingtalk":
-        base_header = f"**总新闻数：** {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"**时间：** {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"**类型：** {report_type}\n\n"
-        base_header += "---\n\n"
-    elif format_type == "slack":
-        base_header = f"*总新闻数：* {total_titles}\n"
-        base_header += ai_stats_line
-        base_header += f"*时间：* {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        base_header += f"*类型：* {report_type}\n\n"
+        b_s, b_e = "", ""
+    else:
+        b_s, b_e = "**", "**"
+
+    # 提取统计数据
+    hotlist_total = report_data.get("hotlist_total", total_hotlist_count)
+    new_count = report_data.get("total_new_count", 0)
+    platform_total = report_data.get("platform_total", 0)
+    failed_count = len(report_data.get("failed_ids", []))
+    platform_success = platform_total - failed_count if platform_total else 0
+    rss_matched = report_data.get("rss_matched_count", 0)
+    rss_total_items = report_data.get("rss_total_count", 0)
+    rss_source_total = report_data.get("rss_source_total", 0)
+    rss_source_failed = report_data.get("rss_source_failed", 0)
+    rss_source_success = max(0, rss_source_total - rss_source_failed)
+
+    # === 上半部分：数据统计 ===
+
+    # 1. 总新闻
+    rss_new_count = sum(len(stat.get("titles", [])) for stat in (rss_new_items or []))
+    total_new = new_count + rss_new_count
+    total_news_line = f"{b_s}总新闻：{b_e} {total_titles} 条"
+    if total_new > 0:
+        total_news_line += f"（新增 {new_count} + {rss_new_count}）"
+    base_header += f"{total_news_line}\n"
+
+    # 2. 热榜
+    hotlist_info = f"{b_s}热榜：{b_e} {total_hotlist_count}/{hotlist_total}"
+    if platform_total > 0:
+        hotlist_info += f"（平台 {platform_success}/{platform_total}）"
+    base_header += f"{hotlist_info}\n"
+
+    # 3. RSS
+    if rss_source_total > 0:
+        rss_info = f"{b_s}RSS：{b_e} {rss_matched}/{rss_total_items}（源 {rss_source_success}/{rss_source_total}）"
+        base_header += f"{rss_info}\n"
+
+    # 4. 独立展示区（仅在有数据时显示）
+    if standalone_data:
+        sa_platform_count = sum(len(p.get("items", [])) for p in standalone_data.get("platforms", []))
+        sa_rss_count = sum(len(f.get("items", [])) for f in standalone_data.get("rss_feeds", []))
+        sa_total = sa_platform_count + sa_rss_count
+        if sa_total > 0:
+            sa_parts = []
+            if sa_platform_count > 0:
+                sa_parts.append(f"热榜 {sa_platform_count}")
+            if sa_rss_count > 0:
+                sa_parts.append(f"RSS {sa_rss_count}")
+            base_header += f"{b_s}独立展示：{b_e} {sa_total} 条（{' + '.join(sa_parts)}）\n"
+
+    # 5. AI 分析（仅在有分析数据时显示）
+    standalone_analyzed = ai_stats.get("standalone_analyzed", 0) if ai_stats else 0
+    ai_has_data = ai_stats and (ai_stats.get("analyzed_news", 0) > 0 or standalone_analyzed > 0)
+    if ai_has_data:
+        hotlist_analyzed = ai_stats.get("hotlist_analyzed", 0)
+        rss_analyzed = ai_stats.get("rss_analyzed", 0)
+        ai_mode_val = ai_stats.get("ai_mode", "")
+
+        ai_parts = [str(hotlist_analyzed)]
+        if ai_stats.get("include_rss", True):
+            ai_parts.append(str(rss_analyzed))
+        if ai_stats.get("include_standalone", False):
+            ai_parts.append(str(standalone_analyzed))
+        ai_display = " + ".join(ai_parts) if sum(int(p) for p in ai_parts) > 0 else "0"
+
+        mode_suffix = ""
+        if ai_mode_val and ai_mode_val != mode:
+            mode_map = {"daily": "全天汇总", "current": "当前榜单", "incremental": "增量分析"}
+            mode_suffix = f" [{mode_map.get(ai_mode_val, ai_mode_val)}]"
+
+        base_header += f"{b_s}AI 分析：{b_e} {ai_display}{mode_suffix}\n"
+
+    # === 空行分隔 ===
+    base_header += "\n"
+
+    # === 下半部分：元信息 ===
+    base_header += f"{b_s}类型：{b_e} {report_type}\n"
+    base_header += f"{b_s}时间：{b_e} {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+
+    top_words = report_data.get("stats", [])[:3]
+    if top_words:
+        topics = " | ".join(f"{s['word']}({s['count']})" for s in top_words)
+        base_header += f"{b_s}最热话题：{b_e} {topics}\n"
+
+    if format_type in ("feishu", "dingtalk"):
+        base_header += "\n---\n\n"
+    else:
+        base_header += "\n"
 
     base_footer = ""
     if format_type in ("wework", "bark"):
@@ -271,9 +406,10 @@ def split_content_into_batches(
             current_batch_has_content = True
         else:
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            # 新批次开头不需要分割线，使用原始 stats_header
-            current_batch = base_header + stats_header
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + stats_header, base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
 
         # 逐个处理词组（确保词组标题+第一条新闻的原子性）
@@ -389,10 +525,12 @@ def split_content_into_batches(
                 len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8"))
                 >= max_bytes
             ):
-                # 当前批次容纳不下，开启新批次
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + stats_header + word_with_first_news
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + stats_header + word_with_first_news,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
                 start_index = 1
             else:
@@ -440,8 +578,11 @@ def split_content_into_batches(
                     >= max_bytes
                 ):
                     if current_batch_has_content:
-                        batches.append(current_batch + base_footer)
-                    current_batch = base_header + stats_header + word_header + news_line
+                        _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                    current_batch = _safe_new_batch(
+                        base_header + stats_header + word_header + news_line,
+                        base_footer, max_bytes, base_header, batches
+                    )
                     current_batch_has_content = True
                 else:
                     current_batch = test_content
@@ -517,8 +658,10 @@ def split_content_into_batches(
             >= max_bytes
         ):
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + new_header
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + new_header, base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
         else:
             current_batch = test_content
@@ -581,8 +724,11 @@ def split_content_into_batches(
                 >= max_bytes
             ):
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + new_header + source_with_first_news
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + new_header + source_with_first_news,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
                 start_index = 1
             else:
@@ -627,8 +773,11 @@ def split_content_into_batches(
                     >= max_bytes
                 ):
                     if current_batch_has_content:
-                        batches.append(current_batch + base_footer)
-                    current_batch = base_header + new_header + source_header + news_line
+                        _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                    current_batch = _safe_new_batch(
+                        base_header + new_header + source_header + news_line,
+                        base_footer, max_bytes, base_header, batches
+                    )
                     current_batch_has_content = True
                 else:
                     current_batch = test_content
@@ -668,13 +817,27 @@ def split_content_into_batches(
             current_batch = test_content
             current_batch_has_content = True
         else:
-            # 当前批次容纳不下，开启新批次
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            # AI 内容可能很长，需要考虑是否需要进一步分割
-            ai_with_header = base_header + ai_content
-            current_batch = ai_with_header
-            current_batch_has_content = True
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+
+            # AI 内容可能很长，按行拆分成多个批次
+            footer_size = len(base_footer.encode("utf-8"))
+            header_size = len(base_header.encode("utf-8"))
+            available = max_bytes - footer_size - header_size
+
+            ai_lines = ai_content.split("\n")
+            current_batch = base_header
+            current_batch_has_content = False
+
+            for line in ai_lines:
+                test_line = line + "\n" if not line.endswith("\n") else line
+                test_content = current_batch + test_line
+                if len(test_content.encode("utf-8")) + footer_size >= max_bytes and current_batch_has_content:
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                    current_batch = base_header + test_line
+                else:
+                    current_batch = test_content
+                current_batch_has_content = True
 
         return current_batch, current_batch_has_content, batches
 
@@ -789,8 +952,10 @@ def split_content_into_batches(
             >= max_bytes
         ):
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + failed_header
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + failed_header, base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
         else:
             current_batch = test_content
@@ -810,8 +975,11 @@ def split_content_into_batches(
                 >= max_bytes
             ):
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + failed_header + failed_line
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + failed_header + failed_line,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
             else:
                 current_batch = test_content
@@ -819,7 +987,7 @@ def split_content_into_batches(
 
     # 完成最后批次
     if current_batch_has_content:
-        batches.append(current_batch + base_footer)
+        _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
 
     return batches
 
@@ -899,8 +1067,10 @@ def _process_rss_stats_section(
         current_batch_has_content = True
     else:
         if current_batch_has_content:
-            batches.append(current_batch + base_footer)
-        current_batch = base_header + rss_header
+            _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+        current_batch = _safe_new_batch(
+            base_header + rss_header, base_footer, max_bytes, base_header, batches
+        )
         current_batch_has_content = True
 
     # 逐个处理关键词组（与热榜一致）
@@ -983,8 +1153,11 @@ def _process_rss_stats_section(
 
         if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + rss_header + word_with_first_news
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + rss_header + word_with_first_news,
+                base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
             start_index = 1
         else:
@@ -1017,8 +1190,11 @@ def _process_rss_stats_section(
             test_content = current_batch + news_line
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + rss_header + word_header + news_line
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + rss_header + word_header + news_line,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
             else:
                 current_batch = test_content
@@ -1132,8 +1308,10 @@ def _process_rss_new_titles_section(
     test_content = current_batch + new_header
     if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
         if current_batch_has_content:
-            batches.append(current_batch + base_footer)
-        current_batch = base_header + new_header
+            _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+        current_batch = _safe_new_batch(
+            base_header + new_header, base_footer, max_bytes, base_header, batches
+        )
         current_batch_has_content = True
     else:
         current_batch = test_content
@@ -1187,8 +1365,11 @@ def _process_rss_new_titles_section(
 
         if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + new_header + source_with_first_news
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + new_header + source_with_first_news,
+                base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
             start_index = 1
         else:
@@ -1220,8 +1401,11 @@ def _process_rss_new_titles_section(
             test_content = current_batch + news_line
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + new_header + source_header + news_line
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + new_header + source_header + news_line,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
             else:
                 current_batch = test_content
@@ -1377,8 +1561,10 @@ def _process_standalone_section(
         current_batch_has_content = True
     else:
         if current_batch_has_content:
-            batches.append(current_batch + base_footer)
-        current_batch = base_header + section_header
+            _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+        current_batch = _safe_new_batch(
+            base_header + section_header, base_footer, max_bytes, base_header, batches
+        )
         current_batch_has_content = True
 
     # 处理热榜平台
@@ -1414,8 +1600,11 @@ def _process_standalone_section(
 
         if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + section_header + platform_with_first
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + section_header + platform_with_first,
+                base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
             start_index = 1
         else:
@@ -1430,8 +1619,11 @@ def _process_standalone_section(
             test_content = current_batch + item_line
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + section_header + platform_header + item_line
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + section_header + platform_header + item_line,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
             else:
                 current_batch = test_content
@@ -1472,8 +1664,11 @@ def _process_standalone_section(
 
         if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
             if current_batch_has_content:
-                batches.append(current_batch + base_footer)
-            current_batch = base_header + section_header + feed_with_first
+                _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+            current_batch = _safe_new_batch(
+                base_header + section_header + feed_with_first,
+                base_footer, max_bytes, base_header, batches
+            )
             current_batch_has_content = True
             start_index = 1
         else:
@@ -1488,8 +1683,11 @@ def _process_standalone_section(
             test_content = current_batch + item_line
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
                 if current_batch_has_content:
-                    batches.append(current_batch + base_footer)
-                current_batch = base_header + section_header + feed_header + item_line
+                    _safe_append_batch(batches, current_batch, base_footer, max_bytes, base_header)
+                current_batch = _safe_new_batch(
+                    base_header + section_header + feed_header + item_line,
+                    base_footer, max_bytes, base_header, batches
+                )
                 current_batch_has_content = True
             else:
                 current_batch = test_content
@@ -1524,7 +1722,8 @@ def _format_standalone_platform_item(item: Dict, index: int, format_type: str, r
     # 如果没有 ranks 列表，用单个 rank 构造
     if not ranks and rank > 0:
         ranks = [rank]
-    rank_display = format_rank_display(ranks, rank_threshold, format_type) if ranks else ""
+    rank_timeline = item.get("rank_timeline")
+    rank_display = format_rank_display(ranks, rank_threshold, format_type, rank_timeline=rank_timeline) if ranks else ""
 
     # 构建时间显示（用 ~ 连接范围，与热点词汇统计区一致）
     # 将 HH-MM 格式转换为 HH:MM 格式

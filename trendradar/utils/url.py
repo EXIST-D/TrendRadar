@@ -126,21 +126,3 @@ def normalize_url(url: str, platform_id: str = "") -> str:
     except Exception:
         # 解析失败时返回原始 URL
         return url
-
-
-def get_url_signature(url: str, platform_id: str = "") -> str:
-    """
-    获取 URL 的签名（用于快速比较）
-
-    基于标准化 URL 生成签名，可用于：
-    - 快速判断两个 URL 是否指向同一内容
-    - 作为缓存键
-
-    Args:
-        url: 原始 URL
-        platform_id: 平台 ID
-
-    Returns:
-        URL 签名字符串
-    """
-    return normalize_url(url, platform_id)

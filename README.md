@@ -12,8 +12,10 @@
 [![GitHub Stars](https://img.shields.io/github/stars/sansan0/TrendRadar?style=flat-square&logo=github&color=yellow)](https://github.com/sansan0/TrendRadar/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/sansan0/TrendRadar?style=flat-square&logo=github&color=blue)](https://github.com/sansan0/TrendRadar/network/members)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v6.5.0-blue.svg)](https://github.com/sansan0/TrendRadar)
-[![MCP](https://img.shields.io/badge/MCP-v4.0.0-green.svg)](https://github.com/sansan0/TrendRadar)
+[![Version](https://img.shields.io/badge/version-v6.10.0-blue.svg)](https://github.com/sansan0/TrendRadar)
+[![MCP](https://img.shields.io/badge/MCP-v4.1.0-green.svg)](https://github.com/sansan0/TrendRadar)
+[![Docker Pulls](https://img.shields.io/docker/pulls/wantcat/trendradar?style=flat-square&logo=docker&logoColor=white&label=TrendRadar%20Pulls&color=2496ED)](https://hub.docker.com/r/wantcat/trendradar)
+[![Docker Pulls](https://img.shields.io/docker/pulls/wantcat/trendradar-mcp?style=flat-square&logo=docker&logoColor=white&label=MCP%20Pulls&color=2496ED)](https://hub.docker.com/r/wantcat/trendradar-mcp)
 [![RSS](https://img.shields.io/badge/RSS-订阅源支持-orange.svg?style=flat-square&logo=rss&logoColor=white)](https://github.com/sansan0/TrendRadar)
 [![AI翻译](https://img.shields.io/badge/AI-多语言推送-purple.svg?style=flat-square)](https://github.com/sansan0/TrendRadar)
 
@@ -187,6 +189,8 @@
 <div align="center">
 
 > **虚位以待**
+>
+> 有意赞助？在微信公众号中触发自动回复，即可获取我的联系方式
 
 </div>
 
@@ -219,10 +223,11 @@
 ### 💬 交流与反馈
 
 - **GitHub Issues**：适合具体的技术问题。提问时请提供完整信息（截图、错误日志等），有助于快速定位。
-- **公众号交流**：建议优先在相关文章下的留言区交流。若需后台提问，**先点赞/推荐**文章是最好的“敲门砖”，我在后台都能感受到这份心意哟 (´▽`ʃ♡ƪ)。
+- **公众号交流**：建议优先在相关文章下的留言区交流。若需后台提问，**先点赞/推荐**文章是最好的"敲门砖"，我在后台都能感受到这份心意哟 (´▽`ʃ♡ƪ)。
+- **QQ 群交流**：关注公众号，回复「**交流群**」即可加入。无论你是 AI 小白还是硬核开发者，想求助技术问题还是分享折腾心得，这里都欢迎你。群里主打互助交流和灵感碰撞，入群请先看群公告；提问时描述清楚问题、附上截图，群友有空就会帮忙，大家的实战经验往往比我一个人更快更全面 🤝
 
-> **友情提示**：        
-> 本项目为开源分享，非商业产品。把作者当朋友而非客服，沟通效率会更高哦！     
+> **友情提示**：
+> 本项目为开源分享，非商业产品。把作者当朋友而非客服，沟通效率会更高哦！
 
 <div align="center">
 
@@ -240,19 +245,11 @@
 - **提示**：建议查看【历史更新】，明确具体的【功能内容】
 
 
-### 2026/03/12 - v6.5.0
+### 2026/06/19 - v6.10.0
 
-- **AI 智能筛选系统**：不用再手动设关键词！在 `ai_interests.txt` 里用日常语言写下你关注的方向（如"我想看 AI 和新能源相关新闻"），AI 会自动提取标签并对每条新闻打分，只推送真正和你相关的内容。万一 AI 筛选出了问题，会自动切回关键词匹配，推送不中断
-- **每个时段支持不同的筛选方式和关注方向**：Timeline 中的每个时间段现在可以独立设置用什么方式筛选、看什么类型的新闻。比如：早上用"科技关键词"快速过滤，晚上换成"金融 AI 兴趣描述"做深度筛选——同一个系统，不同时段看不同内容
-- **AI 分析范围独立于推送**：AI 分析的数据范围可以和推送内容不同。比如推送只发新增消息（避免重复打扰），但 AI 分析当天全部新闻（看完整趋势）。每个时段也能单独设置 AI 分析模式
-- **AI 筛选智能省钱**：已分析过的新闻不会重复消耗 token；兴趣描述修改后，AI 自动判断变化幅度——小改动只更新受影响的标签，大改动才全量重新分类
-- **多文件配置与标签隔离**：自定义关键词文件放 `config/custom/keyword/`，AI 兴趣文件放 `config/custom/ai/`，不同文件产生的标签各自独立、互不干扰
-- **AI 翻译精准控制**：可分别控制热榜、RSS、独立展示区是否翻译，没开启显示的区域自动跳过，不浪费 token
-- **远程存储批量上传**：多次写操作攒在一起统一提交云端，减少 API 调用次数
-- **每组关键词/标签展示数量限制**：通过 `max_news_per_keyword` 控制每个分组最多显示多少条新闻，避免单个热门话题占满整条推送
-- **时段冲突智能检测**：两个时间段如果有时间重叠，系统会自动报错提醒修改，避免配置冲突导致意外行为
-- 修复若干bug
-
+- **AI 翻译分批处理**：大量标题翻译时自动分批请求，避免单次请求超限导致翻译失败
+- **模块拆分重构**：拆分 context.py 和 \_\_main\_\_.py，AI 筛选流水线独立为 filter_pipeline 模块，职责更清晰、维护更方便
+- **修复飞书来源标签显示**：修复飞书卡片中来源标签和 AI 独立源点速览被 CommonMark 吞掉不显示的问题
 
 ### 2026/02/09 - mcp-v4.0.0
 
@@ -265,6 +262,48 @@
 
 <details>
 <summary>👉 点击展开：<strong>历史更新</strong></summary>
+
+### 2026/06/02 - v6.9.0
+
+- **热榜域名安全校验**：新增 `expected_domain` 配置项，校验返回数据链接的域名合法性，不匹配时自动丢弃数据并警告，有效防范链接劫持或数据篡改
+- **自定义热榜 API 地址**：支持自部署 newsnow 并配置 `api_url` 使用自己的数据源
+
+### 2026/05/23 - v6.8.0
+
+- **HTML 报告全面增强**：新增报告元数据展示（生成时间、数据来源、版本号）、暗色模式自动适配、Tab 栏交互优化、趋势箭头可视化，浏览器阅读体验大幅提升
+- **版本检查 CDN 多源回退**：版本检查接口支持 GitHub → jsDelivr → Cloudflare 等多个 CDN 源自动回退，国内网络环境也能稳定获取更新提示
+- **展示区域开关生效**：HTML 报告和邮件现在正确尊重 `display.regions.ai_analysis` 和 `display.regions.standalone` 开关，关闭即不渲染
+- **导出按钮修复**：修复导出按钮点击后下拉菜单图标消失的问题
+- **Markdown 导出修复**：修复 HTML 报告 Markdown 导出中 JS 换行符转义错误
+
+### 2026/05/15 - v6.7.0
+
+- **Markdown 导出**：报告导出下拉菜单新增 Markdown 格式，一键生成带链接的结构化文本，方便 LLM 二次加工和跨平台分享（[#1121](https://github.com/sansan0/TrendRadar/issues/1121)）
+- **RSS guid 去重**：RSS 存储新增 guid 字段，去重优先级改为 guid > url，解决同一文章因 URL 变化导致重复入库的问题
+- **空标题防护**：解析器、渲染层、翻译回填全链路增加空标题兜底逻辑，确保无标题条目也能正常显示
+- **翻译质量增强**：翻译提示词要求保留编号顺序，空翻译结果不再覆盖原始标题
+
+### 2026/03/28 - v6.6.0
+
+- **HTML 报告浏览器增强**：在浏览器中打开报告可自动切换宽屏布局，关键词分组和独立展区均支持 Tab 快速切换，搜索框实时过滤新闻标题，邮件客户端仍显示原始窄屏布局，零回归
+- **暗色模式**：一键切换深色主题，自动记住偏好，适合夜间阅读
+- **一键复制新闻**：鼠标悬停新闻序号即可复制标题和链接，方便快速分享
+- **导出优化**：整页截图和分段截图合并为下拉式导出按钮，截图时自动还原干净布局
+- **快捷键系统**：支持 `W` 宽屏切换、`D` 暗色模式、`/` 搜索、`?` 查看快捷键提示
+- **阅读进度条**：页面顶部实时显示阅读进度
+
+### 2026/03/12 - v6.5.0
+
+- **AI 智能筛选系统**：不用再手动设关键词！在 `ai_interests.txt` 里用日常语言写下你关注的方向（如"我想看 AI 和新能源相关新闻"），AI 会自动提取标签并对每条新闻打分，只推送真正和你相关的内容。万一 AI 筛选出了问题，会自动切回关键词匹配，推送不中断
+- **每个时段支持不同的筛选方式和关注方向**：Timeline 中的每个时间段现在可以独立设置用什么方式筛选、看什么类型的新闻。比如：早上用"科技关键词"快速过滤，晚上换成"金融 AI 兴趣描述"做深度筛选——同一个系统，不同时段看不同内容
+- **AI 分析范围独立于推送**：AI 分析的数据范围可以和推送内容不同。比如推送只发新增消息（避免重复打扰），但 AI 分析当天全部新闻（看完整趋势）。每个时段也能单独设置 AI 分析模式
+- **AI 筛选智能省钱**：已分析过的新闻不会重复消耗 token；兴趣描述修改后，AI 自动判断变化幅度——小改动只更新受影响的标签，大改动才全量重新分类
+- **多文件配置与标签隔离**：自定义关键词文件放 `config/custom/keyword/`，AI 兴趣文件放 `config/custom/ai/`，不同文件产生的标签各自独立、互不干扰
+- **AI 翻译精准控制**：可分别控制热榜、RSS、独立展示区是否翻译，没开启显示的区域自动跳过，不浪费 token
+- **远程存储批量上传**：多次写操作攒在一起统一提交云端，减少 API 调用次数
+- **每组关键词/标签展示数量限制**：通过 `max_news_per_keyword` 控制每个分组最多显示多少条新闻，避免单个热门话题占满整条推送
+- **时段冲突智能检测**：两个时间段如果有时间重叠，系统会自动报错提醒修改，避免配置冲突导致意外行为
+- 修复若干bug
 
 ### 2026/02/09 - v6.0.0
 
@@ -1094,6 +1133,19 @@ ai_translation:
 
 > ⚠️ 部分海外媒体内容可能涉及敏感话题，AI 模型可能拒绝翻译，建议根据实际需求筛选订阅源
 
+### **HTML 报告浏览器增强**（v6.6.0 新增）
+
+在浏览器中打开推送的 HTML 报告，自动解锁增强体验（邮件客户端不受影响）：
+
+- **宽屏模式**：桌面端自动切换 1200px 宽屏布局，充分利用屏幕空间
+- **Tab 快速切换**：关键词分组和独立展区均支持 Tab 导航，告别长页面翻滚
+- **暗色模式**：一键切换深色主题，自动记住偏好
+- **实时搜索**：按 `/` 唤起搜索框，即时过滤新闻标题
+- **一键复制**：悬停新闻序号即可复制标题和链接
+- **快捷键**：`W` 宽屏、`D` 暗色、`/` 搜索、`?` 查看所有快捷键
+
+> 💡 所有增强功能基于渐进增强，邮件客户端仍显示原始 600px 布局，零回归
+
 ### **灵活存储架构**（v4.0.0 重大更新）
 
 **多存储后端支持**：
@@ -1273,84 +1325,45 @@ ai_translation:
    <summary>👉 点击展开：<strong>飞书机器人</strong>（消息显示相对友好）</summary>
    <br>
 
+   > **注意**：原「飞书机器人助手 (BotBuilder)」将于 2026 年 6 月 30 日下线，请使用下方的**群组自定义机器人**方式配置。已有的 BotBuilder webhook 地址将失效，需要重新配置。
+
    若启用 **AI 分析**，飞书推送偶发（约 5% 概率）会有数分钟延迟（推测为平台对 AI 生成内容的合规性审核）。
 
    **GitHub Secret 配置（⚠️ Name 名称必须严格一致）：**
    - **Name（名称）**：`FEISHU_WEBHOOK_URL`（请复制粘贴此名称，不要手打）
-   - **Secret（值）**：你的飞书机器人 Webhook 地址（该链接开头类似 https://www.feishu.cn/flow/api/trigger-webhook/********）
-   <br>
+   - **Secret（值）**：你的飞书自定义机器人 Webhook 地址（格式：`https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxx`）
 
-   有两个方案，**方案一**配置简单，**方案二**配置复杂(但是稳定推送)
+   **配置步骤：**
 
-   其中方案一，由 **ziventian**发现并提供建议，在这里感谢他，默认是个人推送，也可以配置群组推送操作[#97](https://github.com/sansan0/TrendRadar/issues/97) ，
+   1. 进入目标群组，在群组右上角点击 **更多** 按钮，并点击 **设置**。
 
-   **方案一：**
+   ![进入群设置](_image/feishu-bot/step1-group-settings.png)
 
-   > 对部分人存在额外操作，否则会报"系统错误"。需要手机端搜索下机器人，然后开启飞书机器人应用(该建议来自于网友，可参考)
+   2. 在右侧 **设置** 界面，点击 **群机器人**。
 
-   1. 电脑浏览器打开 https://botbuilder.feishu.cn/home/my-command
+   ![点击群机器人](_image/feishu-bot/step2-group-bot.png)
 
-   2. 点击"新建机器人指令" 
+   3. 在 **群机器人** 界面点击 **添加机器人**。
 
-   3. 点击"选择触发器"，往下滑动，点击"Webhook 触发"
+   4. 在 **添加机器人** 对话框，找到并点击 **自定义机器人**。
 
-   4. 此时你会看到"Webhook 地址"，把这个链接先复制到本地记事本暂存，继续接下来的操作
+   ![选择自定义机器人](_image/feishu-bot/step3-custom-bot.png)
 
-   5. "参数"里面放上下面的内容，然后点击"完成"
+   5. 设置自定义机器人的头像、名称（如"TrendRadar 热点监控"）与描述，并点击 **添加**。
 
-   ```json
-   {
-     "message_type": "text",
-     "content": {
-       "text": "{{内容}}"
-     }
-   }
-   ```
+   ![设置机器人信息](_image/feishu-bot/step4-set-name.png)
 
-   6. 点击"选择操作" > "通过官方机器人发消息"
+   6. 获取自定义机器人的 **webhook 地址**，并点击 **完成**。
 
-   7. 消息标题填写"TrendRadar 热点监控"
+   > ⚠️ 请妥善保存此 webhook 地址，不要公布在 GitHub、博客等可公开查阅的网站上，避免地址泄露后被恶意调用发送垃圾消息。
 
-   8. 最关键的部分来了，点击 + 按钮，选择"Webhook 触发"，然后按照下面的图片摆放
+   ![复制 webhook 地址](_image/feishu-bot/step5-webhook-url.png)
 
-   ![飞书机器人配置示例](_image/feishu.png)
+   7. 将复制的 Webhook 地址配置到 GitHub Secrets 中的 `FEISHU_WEBHOOK_URL`。
 
-   9. 配置完成后，将第 4 步复制的 Webhook 地址配置到 GitHub Secrets 中的 `FEISHU_WEBHOOK_URL`
-
-   <br>
-
-   **方案二：**
-
-   1. 电脑浏览器打开 https://botbuilder.feishu.cn/home/my-app
-
-   2. 点击"新建机器人应用"
-
-   3. 进入创建的应用后，点击"流程设计" > "创建流程" > "选择触发器"
-
-   4. 往下滑动，点击"Webhook 触发"
-
-   5. 此时你会看到"Webhook 地址"，把这个链接先复制到本地记事本暂存，继续接下来的操作
-
-   6. "参数"里面放上下面的内容，然后点击"完成"
-
-   ```json
-   {
-     "message_type": "text",
-     "content": {
-       "text": "{{内容}}"
-     }
-   }
-   ```
-
-   7. 点击"选择操作" > "发送飞书消息"，勾选 "群消息"，然后点击下面的输入框，点击"我管理的群组"（如果没有群组，你可以在飞书 app 上创建群组）
-
-   8. 消息标题填写"TrendRadar 热点监控"
-
-   9. 最关键的部分来了，点击 + 按钮，选择"Webhook 触发"，然后按照下面的图片摆放
-
-   ![飞书机器人配置示例](_image/feishu.png)
-
-   10. 配置完成后，将第 5 步复制的 Webhook 地址配置到 GitHub Secrets 中的 `FEISHU_WEBHOOK_URL`
+   > 💡 配置完成后，你可以在群组名称右侧点击机器人图片，进入自定义机器人详情页，管理配置信息。
+   >
+   > 📖 官方文档：[自定义机器人使用指南](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot)
 
    </details>
 
@@ -2704,10 +2717,7 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
 
    | 环境变量 | 对应配置 | 示例值 | 说明 |
    |---------|---------|-------|------|
-   | `ENABLE_WEBSERVER` | - | `true` / `false` | 是否自动启动 Web 服务器 |
    | `WEBSERVER_PORT` | - | `8080` | Web 服务器端口 |
-   | `WEBSERVER_WATCHDOG` | - | `true` / `false` | 是否开启“网页服务自动恢复”（服务异常时自动重开） |
-   | `WEBSERVER_WATCHDOG_INTERVAL` | - | `60` | 自动恢复检查间隔（秒） |
    | `FEISHU_WEBHOOK_URL` | `notification.channels.feishu.webhook_url` | `https://...` | 飞书 Webhook（多账号用 `;` 分隔） |
    | `AI_ANALYSIS_ENABLED` | `ai_analysis.enabled` | `true` / `false` | 是否启用 AI 分析（v5.0.0 新增） |
    | `AI_API_KEY` | `ai.api_key` | `sk-xxx...` | AI API Key（ai_analysis 和 ai_translation 共享） |
@@ -2868,13 +2878,11 @@ docker rm trendradar
 ```
 
 > 💡 **Web 服务器说明**：
-> - 启动后可通过浏览器访问 `http://localhost:8080` 查看最新报告
+> - cron 模式下自动启动，通过浏览器访问 `http://localhost:8080` 查看最新报告
 > - 通过目录导航访问历史报告（如：`http://localhost:8080/2025-xx-xx/`）
 > - 端口可在 `.env` 文件中配置 `WEBSERVER_PORT` 参数
-> - 自动启动：在 `.env` 中设置 `ENABLE_WEBSERVER=true`
-> - 自动恢复：`WEBSERVER_WATCHDOG=true`（默认开启），每隔 `WEBSERVER_WATCHDOG_INTERVAL` 秒检查一次，异常会自动重开网页服务
-> - `stop_webserver` 的意思是“你主动手动关闭网页服务”（命令：`docker exec -it trendradar python manage.py stop_webserver`）
-> - “自动拉起”就是“系统自动把网页服务重新打开”；若你手动关闭后想恢复，请执行 `docker exec -it trendradar python manage.py start_webserver`
+> - 手动停止：`docker exec -it trendradar python manage.py stop_webserver`
+> - 手动启动：`docker exec -it trendradar python manage.py start_webserver`
 > - 安全提示：仅提供静态文件访问，限制在 output 目录，只绑定本地访问
 
 #### 数据持久化
