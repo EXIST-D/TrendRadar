@@ -73,6 +73,7 @@ def _load_crawler_config(config_data: Dict) -> Dict:
         "USE_PROXY": crawler_config.get("use_proxy", False),
         "DEFAULT_PROXY": crawler_config.get("default_proxy", ""),
         "ENABLE_CRAWLER": platforms_config.get("enabled", True),
+        "PLATFORMS_API_URL": _get_env_str("PLATFORMS_API_URL") or platforms_config.get("api_url", ""),
     }
 
 
@@ -576,7 +577,7 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
     # 平台配置
     platforms_config = config_data.get("platforms", {})
-    config["PLATFORMS"] = platforms_config.get("sources", [])
+    config["PLATFORMS"] = [p for p in platforms_config.get("sources", []) if p.get("enabled", True)]
 
     # RSS 配置
     config["RSS"] = _load_rss_config(config_data)

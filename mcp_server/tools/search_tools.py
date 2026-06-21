@@ -252,154 +252,90 @@ class SearchTools:
                 }
             }
 
-    def _search_by_keyword_mode(
+    def _search_titles(
         self,
-        query: str,
         all_titles: Dict,
         id_to_name: Dict,
         current_date: datetime,
-        include_url: bool
+        include_url: bool,
+        match_func,
     ) -> List[Dict]:
         """
-        关键词搜索模式（精确匹配）
+        通用标题搜索方法
 
         Args:
-            query: 搜索关键词
             all_titles: 所有标题字典
             id_to_name: 平台ID到名称映射
             current_date: 当前日期
+            include_url: 是否包含URL
+            match_func: 匹配函数，接收 (title, info)，返回 (is_match, similarity_score) 或 None
 
         Returns:
             匹配的新闻列表
         """
         matches = []
-        query_lower = query.lower()
 
         for platform_id, titles in all_titles.items():
             platform_name = id_to_name.get(platform_id, platform_id)
 
             for title, info in titles.items():
-                # 精确包含判断
-                if query_lower in title.lower():
-                    news_item = {
-                        "title": title,
-                        "platform": platform_id,
-                        "platform_name": platform_name,
-                        "date": current_date.strftime("%Y-%m-%d"),
-                        "similarity_score": 1.0,  # 精确匹配，相似度为1
-                        "ranks": info.get("ranks", []),
-                        "count": len(info.get("ranks", [])),
-                        "rank": info["ranks"][0] if info["ranks"] else 999
-                    }
+                result = match_func(title, info)
+                if result is None:
+                    continue
 
-                    # 条件性添加 URL 字段
-                    if include_url:
-                        news_item["url"] = info.get("url", "")
-                        news_item["mobileUrl"] = info.get("mobileUrl", "")
+                is_match, similarity = result
+                if not is_match:
+                    continue
 
-                    matches.append(news_item)
+                news_item = {
+                    "title": title,
+                    "platform": platform_id,
+                    "platform_name": platform_name,
+                    "date": current_date.strftime("%Y-%m-%d"),
+                    "similarity_score": round(similarity, 4),
+                    "ranks": info.get("ranks", []),
+                    "count": len(info.get("ranks", [])),
+                    "rank": info["ranks"][0] if info["ranks"] else 999
+                }
+
+                if include_url:
+                    news_item["url"] = info.get("url", "")
+                    news_item["mobileUrl"] = info.get("mobileUrl", "")
+
+                matches.append(news_item)
 
         return matches
+
+    def _search_by_keyword_mode(
+        self, query: str, all_titles: Dict, id_to_name: Dict,
+        current_date: datetime, include_url: bool
+    ) -> List[Dict]:
+        """关键词搜索模式（精确匹配）"""
+        query_lower = query.lower()
+        return self._search_titles(
+            all_titles, id_to_name, current_date, include_url,
+            match_func=lambda title, info: (True, 1.0) if query_lower in title.lower() else (False, 0),
+        )
 
     def _search_by_fuzzy_mode(
-        self,
-        query: str,
-        all_titles: Dict,
-        id_to_name: Dict,
-        current_date: datetime,
-        threshold: float,
-        include_url: bool
+        self, query: str, all_titles: Dict, id_to_name: Dict,
+        current_date: datetime, threshold: float, include_url: bool
     ) -> List[Dict]:
-        """
-        模糊搜索模式（使用相似度算法）
-
-        Args:
-            query: 搜索内容
-            all_titles: 所有标题字典
-            id_to_name: 平台ID到名称映射
-            current_date: 当前日期
-            threshold: 相似度阈值
-
-        Returns:
-            匹配的新闻列表
-        """
-        matches = []
-
-        for platform_id, titles in all_titles.items():
-            platform_name = id_to_name.get(platform_id, platform_id)
-
-            for title, info in titles.items():
-                # 模糊匹配
-                is_match, similarity = self._fuzzy_match(query, title, threshold)
-
-                if is_match:
-                    news_item = {
-                        "title": title,
-                        "platform": platform_id,
-                        "platform_name": platform_name,
-                        "date": current_date.strftime("%Y-%m-%d"),
-                        "similarity_score": round(similarity, 4),
-                        "ranks": info.get("ranks", []),
-                        "count": len(info.get("ranks", [])),
-                        "rank": info["ranks"][0] if info["ranks"] else 999
-                    }
-
-                    # 条件性添加 URL 字段
-                    if include_url:
-                        news_item["url"] = info.get("url", "")
-                        news_item["mobileUrl"] = info.get("mobileUrl", "")
-
-                    matches.append(news_item)
-
-        return matches
+        """模糊搜索模式（使用相似度算法）"""
+        return self._search_titles(
+            all_titles, id_to_name, current_date, include_url,
+            match_func=lambda title, info: self._fuzzy_match(query, title, threshold),
+        )
 
     def _search_by_entity_mode(
-        self,
-        query: str,
-        all_titles: Dict,
-        id_to_name: Dict,
-        current_date: datetime,
-        include_url: bool
+        self, query: str, all_titles: Dict, id_to_name: Dict,
+        current_date: datetime, include_url: bool
     ) -> List[Dict]:
-        """
-        实体搜索模式（自动按权重排序）
-
-        Args:
-            query: 实体名称
-            all_titles: 所有标题字典
-            id_to_name: 平台ID到名称映射
-            current_date: 当前日期
-
-        Returns:
-            匹配的新闻列表
-        """
-        matches = []
-
-        for platform_id, titles in all_titles.items():
-            platform_name = id_to_name.get(platform_id, platform_id)
-
-            for title, info in titles.items():
-                # 实体搜索：精确包含实体名称
-                if query in title:
-                    news_item = {
-                        "title": title,
-                        "platform": platform_id,
-                        "platform_name": platform_name,
-                        "date": current_date.strftime("%Y-%m-%d"),
-                        "similarity_score": 1.0,
-                        "ranks": info.get("ranks", []),
-                        "count": len(info.get("ranks", [])),
-                        "rank": info["ranks"][0] if info["ranks"] else 999
-                    }
-
-                    # 条件性添加 URL 字段
-                    if include_url:
-                        news_item["url"] = info.get("url", "")
-                        news_item["mobileUrl"] = info.get("mobileUrl", "")
-
-                    matches.append(news_item)
-
-        return matches
+        """实体搜索模式（精确包含实体名称）"""
+        return self._search_titles(
+            all_titles, id_to_name, current_date, include_url,
+            match_func=lambda title, info: (True, 1.0) if query in title else (False, 0),
+        )
 
     def _calculate_similarity(self, text1: str, text2: str) -> float:
         """
@@ -854,7 +790,7 @@ class SearchTools:
                                 
                                 all_related_news.append(news_item)
                                 
-                except Exception:
+                except (OSError, KeyError, TypeError, ValueError):
                     # 某天数据读取失败，跳过
                     continue
 
@@ -956,7 +892,7 @@ class SearchTools:
             except DataNotFoundError:
                 # 该日期没有 RSS 数据，继续下一天
                 pass
-            except Exception:
+            except (OSError, KeyError, TypeError, ValueError):
                 # 其他错误，跳过
                 pass
 

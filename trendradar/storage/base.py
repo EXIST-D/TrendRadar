@@ -75,6 +75,7 @@ class RSSItem:
     feed_id: str                        # RSS 源 ID（如 "hacker-news"）
     feed_name: str = ""                 # RSS 源名称（运行时使用）
     url: str = ""                       # 文章链接
+    guid: str = ""                      # GUID/ID（RSS guid 或 Atom id）
     published_at: str = ""              # RSS 发布时间（ISO 格式）
     summary: str = ""                   # 摘要/描述
     author: str = ""                    # 作者

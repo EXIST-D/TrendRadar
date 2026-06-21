@@ -8,10 +8,10 @@ AI 分析器模块
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from trendradar.ai.client import AIClient
+from trendradar.ai.prompt_loader import load_prompt_template
 
 
 @dataclass
@@ -28,15 +28,31 @@ class AIAnalysisResult:
     # 基础元数据
     raw_response: str = ""               # 原始响应
     success: bool = False                # 是否成功
+    skipped: bool = False                # 是否因无内容跳过（非失败）
     error: str = ""                      # 错误信息
 
     # 新闻数量统计
     total_news: int = 0                  # 总新闻数（热榜+RSS）
     analyzed_news: int = 0               # 实际分析的新闻数
     max_news_limit: int = 0              # 分析上限配置值
-    hotlist_count: int = 0               # 热榜新闻数
-    rss_count: int = 0                   # RSS 新闻数
+    hotlist_count: int = 0               # 热榜新闻数（总数）
+    rss_count: int = 0                   # RSS 新闻数（总数）
+    hotlist_analyzed: int = 0            # 热榜实际分析数
+    rss_analyzed: int = 0               # RSS 实际分析数
+    standalone_analyzed: int = 0        # 独立展示区实际分析数
     ai_mode: str = ""                    # AI 分析使用的模式 (daily/current/incremental)
+    include_rss: bool = True             # 是否启用 RSS 分析
+    include_standalone: bool = False     # 是否启用独立展示区分析
+
+
+class PreparedNewsContent(NamedTuple):
+    news_content: str
+    rss_content: str
+    hotlist_total: int
+    rss_total: int
+    analyzed_count: int
+    hotlist_analyzed: int
+    rss_analyzed: int
 
 
 class AIAnalyzer:
@@ -79,40 +95,10 @@ class AIAnalyzer:
         self.language = analysis_config.get("LANGUAGE", "Chinese")
 
         # 加载提示词模板
-        self.system_prompt, self.user_prompt_template = self._load_prompt_template(
-            analysis_config.get("PROMPT_FILE", "ai_analysis_prompt.txt")
+        self.system_prompt, self.user_prompt_template = load_prompt_template(
+            analysis_config.get("PROMPT_FILE", "ai_analysis_prompt.txt"),
+            label="AI",
         )
-
-    def _load_prompt_template(self, prompt_file: str) -> tuple:
-        """加载提示词模板"""
-        config_dir = Path(__file__).parent.parent.parent / "config"
-        prompt_path = config_dir / prompt_file
-
-        if not prompt_path.exists():
-            print(f"[AI] 提示词文件不存在: {prompt_path}")
-            return "", ""
-
-        content = prompt_path.read_text(encoding="utf-8")
-
-        # 解析 [system] 和 [user] 部分
-        system_prompt = ""
-        user_prompt = ""
-
-        if "[system]" in content and "[user]" in content:
-            parts = content.split("[user]")
-            system_part = parts[0]
-            user_part = parts[1] if len(parts) > 1 else ""
-
-            # 提取 system 内容
-            if "[system]" in system_part:
-                system_prompt = system_part.split("[system]")[1].strip()
-
-            user_prompt = user_part.strip()
-        else:
-            # 整个文件作为 user prompt
-            user_prompt = content
-
-        return system_prompt, user_prompt
 
     def analyze(
         self,
@@ -163,16 +149,17 @@ class AIAnalyzer:
             )
 
         # 准备新闻内容并获取统计数据
-        news_content, rss_content, hotlist_total, rss_total, analyzed_count = self._prepare_news_content(stats, rss_stats)
-        total_news = hotlist_total + rss_total
+        prepared = self._prepare_news_content(stats, rss_stats)
+        total_news = prepared.hotlist_total + prepared.rss_total
 
-        if not news_content and not rss_content:
+        if not prepared.news_content and not prepared.rss_content:
             return AIAnalysisResult(
                 success=False,
-                error="没有可分析的新闻内容",
+                skipped=True,
+                error="本轮无新增热点内容，跳过 AI 分析",
                 total_news=total_news,
-                hotlist_count=hotlist_total,
-                rss_count=rss_total,
+                hotlist_count=prepared.hotlist_total,
+                rss_count=prepared.rss_total,
                 analyzed_news=0,
                 max_news_limit=self.max_news
             )
@@ -189,18 +176,19 @@ class AIAnalyzer:
         user_prompt = user_prompt.replace("{report_mode}", report_mode)
         user_prompt = user_prompt.replace("{report_type}", report_type)
         user_prompt = user_prompt.replace("{current_time}", current_time)
-        user_prompt = user_prompt.replace("{news_count}", str(hotlist_total))
-        user_prompt = user_prompt.replace("{rss_count}", str(rss_total))
+        user_prompt = user_prompt.replace("{news_count}", str(prepared.hotlist_total))
+        user_prompt = user_prompt.replace("{rss_count}", str(prepared.rss_total))
         user_prompt = user_prompt.replace("{platforms}", ", ".join(platforms) if platforms else "多平台")
         user_prompt = user_prompt.replace("{keywords}", ", ".join(keywords[:20]) if keywords else "无")
-        user_prompt = user_prompt.replace("{news_content}", news_content)
-        user_prompt = user_prompt.replace("{rss_content}", rss_content)
+        user_prompt = user_prompt.replace("{news_content}", prepared.news_content)
+        user_prompt = user_prompt.replace("{rss_content}", prepared.rss_content)
         user_prompt = user_prompt.replace("{language}", self.language)
 
         # 构建独立展示区内容
         standalone_content = ""
+        standalone_count = 0
         if self.include_standalone and standalone_data:
-            standalone_content = self._prepare_standalone_content(standalone_data)
+            standalone_content, standalone_count = self._prepare_standalone_content(standalone_data)
         user_prompt = user_prompt.replace("{standalone_content}", standalone_content)
 
         if self.debug:
@@ -240,10 +228,15 @@ class AIAnalyzer:
 
             # 填充统计数据
             result.total_news = total_news
-            result.hotlist_count = hotlist_total
-            result.rss_count = rss_total
-            result.analyzed_news = analyzed_count
+            result.hotlist_count = prepared.hotlist_total
+            result.rss_count = prepared.rss_total
+            result.analyzed_news = prepared.analyzed_count
+            result.hotlist_analyzed = prepared.hotlist_analyzed
+            result.rss_analyzed = prepared.rss_analyzed
+            result.standalone_analyzed = standalone_count
             result.max_news_limit = self.max_news
+            result.include_rss = self.include_rss
+            result.include_standalone = self.include_standalone
             return result
         except Exception as e:
             error_type = type(e).__name__
@@ -263,16 +256,7 @@ class AIAnalyzer:
         self,
         stats: List[Dict],
         rss_stats: Optional[List[Dict]] = None,
-    ) -> tuple:
-        """
-        准备新闻内容文本（增强版）
-
-        热榜新闻包含：来源、标题、排名范围、时间范围、出现次数
-        RSS 包含：来源、标题、发布时间
-
-        Returns:
-            tuple: (news_content, rss_content, hotlist_total, rss_total, analyzed_count)
-        """
+    ) -> PreparedNewsContent:
         news_lines = []
         rss_lines = []
         news_count = 0
@@ -376,7 +360,15 @@ class AIAnalyzer:
         rss_content = "\n".join(rss_lines) if rss_lines else ""
         total_count = news_count + rss_count
 
-        return news_content, rss_content, hotlist_total, rss_total, total_count
+        return PreparedNewsContent(
+            news_content=news_content,
+            rss_content=rss_content,
+            hotlist_total=hotlist_total,
+            rss_total=rss_total,
+            analyzed_count=total_count,
+            hotlist_analyzed=news_count,
+            rss_analyzed=rss_count,
+        )
 
     def _call_ai(self, user_prompt: str) -> str:
         """调用 AI API（使用 LiteLLM）"""
@@ -475,7 +467,7 @@ class AIAnalyzer:
 
         return "→".join(parts)
 
-    def _prepare_standalone_content(self, standalone_data: Dict) -> str:
+    def _prepare_standalone_content(self, standalone_data: Dict) -> tuple:
         """
         将独立展示区数据转为文本，注入 AI 分析 prompt
 
@@ -483,7 +475,7 @@ class AIAnalyzer:
             standalone_data: 独立展示区数据 {"platforms": [...], "rss_feeds": [...]}
 
         Returns:
-            格式化的文本内容
+            tuple: (格式化的文本内容, 独立展示区条目数)
         """
         lines = []
 
@@ -555,7 +547,12 @@ class AIAnalyzer:
                 lines.append(line)
             lines.append("")
 
-        return "\n".join(lines)
+        standalone_count = sum(
+            len(p.get("items", [])) for p in standalone_data.get("platforms", [])
+        ) + sum(
+            len(f.get("items", [])) for f in standalone_data.get("rss_feeds", [])
+        )
+        return "\n".join(lines), standalone_count
 
     def _parse_response(self, response: str) -> AIAnalysisResult:
         """解析 AI 响应"""

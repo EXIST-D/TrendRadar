@@ -96,7 +96,21 @@ class SQLiteStorageMixin:
                 with open(ai_filter_schema, "r", encoding="utf-8") as f:
                     conn.executescript(f.read())
 
+        if db_type == "rss":
+            self._migrate_rss_schema(conn)
+
         conn.commit()
+
+    def _migrate_rss_schema(self, conn: sqlite3.Connection) -> None:
+        """迁移 rss_items 表结构（为已有数据库添加 guid 列）"""
+        cursor = conn.execute("PRAGMA table_info(rss_items)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "guid" not in columns:
+            conn.execute("ALTER TABLE rss_items ADD COLUMN guid TEXT DEFAULT ''")
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_rss_guid_feed
+                ON rss_items(guid, feed_id) WHERE guid != ''
+            """)
 
     # ========================================
     # 新闻数据存储
@@ -156,14 +170,19 @@ class SQLiteStorageMixin:
                                 # 已存在，更新记录
                                 existing_id, existing_title = existing
 
+                                update_title = item.title
+                                if (update_title and update_title.strip().startswith(("http://", "https://", "//"))
+                                        and existing_title and not existing_title.strip().startswith(("http://", "https://", "//"))):
+                                    update_title = existing_title
+
                                 # 检查标题是否变化
-                                if existing_title != item.title:
+                                if existing_title != update_title:
                                     # 记录标题变更
                                     cursor.execute("""
                                         INSERT INTO title_changes
                                         (news_item_id, old_title, new_title, changed_at)
                                         VALUES (?, ?, ?, ?)
-                                    """, (existing_id, existing_title, item.title, now_str))
+                                    """, (existing_id, existing_title, update_title, now_str))
                                     title_changed_count += 1
 
                                 # 记录排名历史
@@ -183,7 +202,7 @@ class SQLiteStorageMixin:
                                         crawl_count = crawl_count + 1,
                                         updated_at = ?
                                     WHERE id = ?
-                                """, (item.title, item.rank, item.mobile_url,
+                                """, (update_title, item.rank, item.mobile_url,
                                       data.crawl_time, now_str, existing_id))
                                 updated_count += 1
                             else:
@@ -370,6 +389,9 @@ class SQLiteStorageMixin:
                 for rh_row in cursor.fetchall():
                     news_id, rank, crawl_time = rh_row[0], rh_row[1], rh_row[2]
 
+                    if not crawl_time:
+                        continue
+
                     # 构建 ranks 列表（去重，排除脱榜记录 rank=0）
                     if news_id not in rank_history_map:
                         rank_history_map[news_id] = []
@@ -380,7 +402,10 @@ class SQLiteStorageMixin:
                     if news_id not in rank_timeline_map:
                         rank_timeline_map[news_id] = []
                     # 提取时间部分（HH:MM）
-                    time_part = crawl_time.split()[1][:5] if ' ' in crawl_time else crawl_time[:5]
+                    try:
+                        time_part = crawl_time.split()[1][:5] if ' ' in crawl_time else crawl_time[:5]
+                    except (IndexError, AttributeError):
+                        time_part = "??:??"
                     rank_timeline_map[news_id].append({
                         "time": time_part,
                         "rank": rank if rank != 0 else None  # 0 转为 None 表示脱榜
@@ -516,6 +541,9 @@ class SQLiteStorageMixin:
                 for rh_row in cursor.fetchall():
                     news_id, rank, crawl_time = rh_row[0], rh_row[1], rh_row[2]
 
+                    if not crawl_time:
+                        continue
+
                     # 构建 ranks 列表（去重，排除脱榜记录 rank=0）
                     if news_id not in rank_history_map:
                         rank_history_map[news_id] = []
@@ -526,7 +554,10 @@ class SQLiteStorageMixin:
                     if news_id not in rank_timeline_map:
                         rank_timeline_map[news_id] = []
                     # 提取时间部分（HH:MM）
-                    time_part = crawl_time.split()[1][:5] if ' ' in crawl_time else crawl_time[:5]
+                    try:
+                        time_part = crawl_time.split()[1][:5] if ' ' in crawl_time else crawl_time[:5]
+                    except (IndexError, AttributeError):
+                        time_part = "??:??"
                     rank_timeline_map[news_id].append({
                         "time": time_part,
                         "rank": rank if rank != 0 else None  # 0 转为 None 表示脱榜
@@ -818,65 +849,62 @@ class SQLiteStorageMixin:
             for feed_id, rss_list in data.items.items():
                 for item in rss_list:
                     try:
-                        # 检查是否已存在（通过 URL + feed_id）
-                        if item.url:
+                        item_guid = getattr(item, "guid", "") or ""
+                        existing = None
+
+                        # 去重优先级：guid > url
+                        if item_guid:
+                            cursor.execute("""
+                                SELECT id, title FROM rss_items
+                                WHERE guid = ? AND feed_id = ?
+                            """, (item_guid, feed_id))
+                            existing = cursor.fetchone()
+
+                        if not existing and item.url:
                             cursor.execute("""
                                 SELECT id, title FROM rss_items
                                 WHERE url = ? AND feed_id = ?
                             """, (item.url, feed_id))
                             existing = cursor.fetchone()
 
-                            if existing:
-                                # 已存在，更新记录
-                                existing_id = existing[0]
-                                cursor.execute("""
-                                    UPDATE rss_items SET
-                                        title = ?,
-                                        published_at = ?,
-                                        summary = ?,
-                                        author = ?,
-                                        last_crawl_time = ?,
-                                        crawl_count = crawl_count + 1,
-                                        updated_at = ?
-                                    WHERE id = ?
-                                """, (item.title, item.published_at, item.summary,
-                                      item.author, data.crawl_time, now_str, existing_id))
-                                updated_count += 1
-                            else:
-                                # 不存在，插入新记录（使用 ON CONFLICT 兜底处理并发/竞争场景）
-                                cursor.execute("""
-                                    INSERT INTO rss_items
-                                    (title, feed_id, url, published_at, summary, author,
-                                     first_crawl_time, last_crawl_time, crawl_count,
-                                     created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                                    ON CONFLICT(url, feed_id) DO UPDATE SET
-                                        title = excluded.title,
-                                        published_at = excluded.published_at,
-                                        summary = excluded.summary,
-                                        author = excluded.author,
-                                        last_crawl_time = excluded.last_crawl_time,
-                                        crawl_count = crawl_count + 1,
-                                        updated_at = excluded.updated_at
-                                """, (item.title, feed_id, item.url, item.published_at,
-                                      item.summary, item.author, data.crawl_time,
-                                      data.crawl_time, now_str, now_str))
-                                new_count += 1
-                        else:
-                            # URL 为空，用 try-except 处理重复
+                        if existing:
+                            existing_id = existing[0]
+                            existing_title = existing[1]
+                            update_title = item.title
+                            if (update_title and update_title.strip().startswith(("http://", "https://", "//"))
+                                    and existing_title and not existing_title.strip().startswith(("http://", "https://", "//"))):
+                                update_title = existing_title
+                            cursor.execute("""
+                                UPDATE rss_items SET
+                                    title = ?,
+                                    url = CASE WHEN ? != '' THEN ? ELSE url END,
+                                    guid = CASE WHEN ? != '' THEN ? ELSE guid END,
+                                    published_at = ?,
+                                    summary = ?,
+                                    author = ?,
+                                    last_crawl_time = ?,
+                                    crawl_count = crawl_count + 1,
+                                    updated_at = ?
+                                WHERE id = ?
+                            """, (update_title,
+                                  item.url, item.url,
+                                  item_guid, item_guid,
+                                  item.published_at, item.summary,
+                                  item.author, data.crawl_time, now_str, existing_id))
+                            updated_count += 1
+                        elif item.url or item_guid:
                             try:
                                 cursor.execute("""
                                     INSERT INTO rss_items
-                                    (title, feed_id, url, published_at, summary, author,
+                                    (title, feed_id, url, guid, published_at, summary, author,
                                      first_crawl_time, last_crawl_time, crawl_count,
                                      created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                                """, (item.title, feed_id, "", item.published_at,
-                                      item.summary, item.author, data.crawl_time,
-                                      data.crawl_time, now_str, now_str))
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                """, (item.title, feed_id, item.url, item_guid,
+                                      item.published_at, item.summary, item.author,
+                                      data.crawl_time, data.crawl_time, now_str, now_str))
                                 new_count += 1
                             except sqlite3.IntegrityError:
-                                # 重复的空 URL 条目，忽略
                                 pass
 
                     except sqlite3.Error as e:
@@ -1047,11 +1075,11 @@ class SQLiteStorageMixin:
                         if item.url:
                             historical_urls[feed_id].add(item.url)
 
-            # 检查是否有历史数据
+            # 检查是否有早于当前批次的历史数据
             has_historical_data = any(len(urls) > 0 for urls in historical_urls.values())
             if not has_historical_data:
-                # 第一次抓取，没有"新增"概念
-                return {}
+                # 当天第一次抓取，所有条目都是新增
+                return current_data.items.copy()
 
             # 检测新增
             new_items: Dict[str, List[RSSItem]] = {}
@@ -1591,22 +1619,40 @@ class SQLiteStorageMixin:
 
             # 批量查排名历史（热榜）
             ranks_map: Dict[int, List[int]] = {}
+            rank_timeline_map: Dict[int, List[Dict[str, Any]]] = {}
             if hotlist_news_ids:
                 unique_ids = list(set(hotlist_news_ids))
                 placeholders = ",".join("?" * len(unique_ids))
                 cursor.execute(f"""
-                    SELECT news_item_id, rank FROM rank_history
-                    WHERE news_item_id IN ({placeholders}) AND rank != 0
+                    SELECT news_item_id, rank, crawl_time FROM rank_history
+                    WHERE news_item_id IN ({placeholders})
+                    ORDER BY news_item_id, crawl_time
                 """, unique_ids)
                 for rh_row in cursor.fetchall():
-                    nid, rank = rh_row[0], rh_row[1]
+                    nid, rank, crawl_time = rh_row[0], rh_row[1], rh_row[2]
+
+                    if not crawl_time:
+                        continue
+
                     if nid not in ranks_map:
                         ranks_map[nid] = []
-                    if rank not in ranks_map[nid]:
+                    if rank != 0 and rank not in ranks_map[nid]:
                         ranks_map[nid].append(rank)
+
+                    if nid not in rank_timeline_map:
+                        rank_timeline_map[nid] = []
+                    try:
+                        time_part = crawl_time.split()[1][:5] if ' ' in crawl_time else crawl_time[:5]
+                    except (IndexError, AttributeError):
+                        time_part = "??:??"
+                    rank_timeline_map[nid].append({
+                        "time": time_part,
+                        "rank": rank if rank != 0 else None
+                    })
 
             for item in results:
                 item["ranks"] = ranks_map.get(item["news_item_id"], [item["rank"]])
+                item["rank_timeline"] = rank_timeline_map.get(item["news_item_id"], [])
 
             # RSS 结果（如果有 rss 库）
             try:

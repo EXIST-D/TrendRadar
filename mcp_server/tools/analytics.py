@@ -75,7 +75,7 @@ def _get_weight_config() -> Dict:
             }
             _weight_config_mtime = current_mtime
             return _weight_config_cache
-    except Exception:
+    except (OSError, yaml.YAMLError, KeyError, TypeError):
         return _WEIGHT_DEFAULT_CONFIG
 
 

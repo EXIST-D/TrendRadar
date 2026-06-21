@@ -487,7 +487,7 @@ class DataService:
                 "use_proxy": advanced_crawler.get("use_proxy", False),
                 "request_interval": advanced_crawler.get("request_interval", 1),
                 "retry_times": 3,
-                "platforms": [p["id"] for p in platforms_config.get("sources", [])]
+                "platforms": [p["id"] for p in platforms_config.get("sources", []) if p.get("enabled", True)]
             }
 
         if section == "all" or section == "push":
@@ -600,7 +600,7 @@ class DataService:
             try:
                 with open(version_file, "r") as f:
                     version = f.read().strip()
-            except:
+            except (OSError, ValueError):
                 pass
 
         return {

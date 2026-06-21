@@ -3,6 +3,9 @@
  * 特点：确保原始 YAML 的注释和格式 100% 保留
  */
 
+// 编辑器常量
+const EDITOR_LINE_HEIGHT = 19.5;  // 编辑器行高（px），用于滚动定位计算
+
 // ==========================================
 // 0. 注释高亮功能
 // ==========================================
@@ -115,11 +118,55 @@ const STORAGE_KEY_CONFIG_TIME = 'trendradar_config_time';
 const STORAGE_KEY_FREQUENCY_TIME = 'trendradar_frequency_time';
 const STORAGE_KEY_TIMELINE_TIME = 'trendradar_timeline_time';
 
-// 官网配置文件 URL
-const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/config/config.yaml';
-const REMOTE_FREQUENCY_URL = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/config/frequency_words.txt';
-const REMOTE_TIMELINE_URL = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/config/timeline.yaml';
-const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/version_configs';
+// 官网配置文件 URL（GitHub 主源）
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/';
+const REMOTE_CONFIG_URL = GITHUB_RAW_BASE + 'config/config.yaml';
+const REMOTE_FREQUENCY_URL = GITHUB_RAW_BASE + 'config/frequency_words.txt';
+const REMOTE_TIMELINE_URL = GITHUB_RAW_BASE + 'config/timeline.yaml';
+const REMOTE_VERSION_URL = GITHUB_RAW_BASE + 'version_configs';
+
+// 所有源（GitHub 主源 + CDN 备用源），按优先级排列
+const ALL_SOURCES = [
+    GITHUB_RAW_BASE,
+    'https://fastly.jsdelivr.net/gh/sansan0/TrendRadar@master/',
+    'https://cdn.jsdelivr.net/gh/sansan0/TrendRadar@master/',
+    'https://gcore.jsdelivr.net/gh/sansan0/TrendRadar@master/',
+];
+let lastOkIndex = 0;
+
+async function fetchWithTimeout(url, timeout = 5000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        return resp;
+    } catch (e) {
+        clearTimeout(id);
+        throw e;
+    }
+}
+
+async function fetchWithFallback(url, timeout = 5000) {
+    const path = url.startsWith(GITHUB_RAW_BASE) ? url.slice(GITHUB_RAW_BASE.length) : null;
+    if (!path) return fetch(url);
+
+    const n = ALL_SOURCES.length;
+    for (let offset = 0; offset < n; offset++) {
+        const idx = (lastOkIndex + offset) % n;
+        try {
+            const resp = await fetchWithTimeout(ALL_SOURCES[idx] + path, timeout);
+            if (resp.ok) {
+                if (idx !== lastOkIndex) {
+                    console.log(`[CDN] 已切换到: ${ALL_SOURCES[idx].split('//')[1].split('/')[0]}`);
+                }
+                lastOkIndex = idx;
+                return resp;
+            }
+        } catch {}
+    }
+    throw new Error('所有源均不可用，请检查网络连接');
+}
 
 let currentYaml = "";
 let currentFrequency = "";
@@ -384,46 +431,30 @@ function handleFileDrop(e, type) {
 // 2.2 LocalStorage 保存与恢复
 // ==========================================
 
-// 保存 config.yaml
+// 通用 LocalStorage 保存函数
+function _saveToStorage(content, storageKey, timeKey, label) {
+    try {
+        if (content && content.trim().length > 10) {
+            const now = new Date().toISOString();
+            localStorage.setItem(storageKey, content);
+            localStorage.setItem(timeKey, now);
+            updateSaveTimeDisplay();
+        }
+    } catch (e) {
+        console.warn(`LocalStorage 保存 ${label} 失败:`, e);
+    }
+}
+
 function saveConfigToLocalStorage() {
-    try {
-        if (currentYaml && currentYaml.trim().length > 10) {
-            const now = new Date().toISOString();
-            localStorage.setItem(STORAGE_KEY_CONFIG, currentYaml);
-            localStorage.setItem(STORAGE_KEY_CONFIG_TIME, now);
-            updateSaveTimeDisplay();
-        }
-    } catch (e) {
-        console.warn('LocalStorage 保存 config 失败:', e);
-    }
+    _saveToStorage(currentYaml, STORAGE_KEY_CONFIG, STORAGE_KEY_CONFIG_TIME, 'config');
 }
 
-// 保存 frequency_words.txt
 function saveFrequencyToLocalStorage() {
-    try {
-        if (currentFrequency && currentFrequency.trim().length > 10) {
-            const now = new Date().toISOString();
-            localStorage.setItem(STORAGE_KEY_FREQUENCY, currentFrequency);
-            localStorage.setItem(STORAGE_KEY_FREQUENCY_TIME, now);
-            updateSaveTimeDisplay();
-        }
-    } catch (e) {
-        console.warn('LocalStorage 保存 frequency 失败:', e);
-    }
+    _saveToStorage(currentFrequency, STORAGE_KEY_FREQUENCY, STORAGE_KEY_FREQUENCY_TIME, 'frequency');
 }
 
-// 保存 timeline.yaml
 function saveTimelineToLocalStorage() {
-    try {
-        if (currentTimeline && currentTimeline.trim().length > 10) {
-            const now = new Date().toISOString();
-            localStorage.setItem(STORAGE_KEY_TIMELINE, currentTimeline);
-            localStorage.setItem(STORAGE_KEY_TIMELINE_TIME, now);
-            updateSaveTimeDisplay();
-        }
-    } catch (e) {
-        console.warn('LocalStorage 保存 timeline 失败:', e);
-    }
+    _saveToStorage(currentTimeline, STORAGE_KEY_TIMELINE, STORAGE_KEY_TIMELINE_TIME, 'timeline');
 }
 
 // 保存全部（页面关闭时调用）
@@ -582,13 +613,13 @@ window.confirmLoadConfig = async function() {
     }
 
     closeLoadConfigModal();
-    showToast('正在从 GitHub 加载...', 'info');
+    showToast('正在加载最新配置...', 'info');
 
     try {
         const promises = [];
-        if (loadConfig) promises.push(fetch(REMOTE_CONFIG_URL).then(r => ({ type: 'config', res: r })));
-        if (loadFrequency) promises.push(fetch(REMOTE_FREQUENCY_URL).then(r => ({ type: 'frequency', res: r })));
-        if (loadTimeline) promises.push(fetch(REMOTE_TIMELINE_URL).then(r => ({ type: 'timeline', res: r })));
+        if (loadConfig) promises.push(fetchWithFallback(REMOTE_CONFIG_URL).then(r => ({ type: 'config', res: r })));
+        if (loadFrequency) promises.push(fetchWithFallback(REMOTE_FREQUENCY_URL).then(r => ({ type: 'frequency', res: r })));
+        if (loadTimeline) promises.push(fetchWithFallback(REMOTE_TIMELINE_URL).then(r => ({ type: 'timeline', res: r })));
 
         const results = await Promise.all(promises);
 
@@ -768,7 +799,7 @@ window.scrollToWordGroupInEditor = function(groupIndex) {
     if (targetLineIndex === undefined || targetLineIndex === -1) return;
 
     const lines = editor.value.split('\n');
-    const lineHeight = 19.5;
+    const lineHeight = EDITOR_LINE_HEIGHT;
     const scrollPosition = targetLineIndex * lineHeight;
 
     // 设置光标选区
@@ -827,7 +858,7 @@ window.scrollToModuleInEditor = function(modKey) {
     if (targetLineIndex === -1) return;
 
     // 计算目标位置并滚动
-    const lineHeight = 19.5;
+    const lineHeight = EDITOR_LINE_HEIGHT;
     const scrollPosition = targetLineIndex * lineHeight;
 
     // 设置光标位置
@@ -987,6 +1018,8 @@ function renderControls(mod) {
             html = createToggleControl(mod.key, "enabled", "开启 AI 自动翻译");
             html += createInputControl(mod.key, "language", "目标语言");
             html += createInputControl(mod.key, "prompt_file", "提示词配置文件");
+            html += createNumberControl(mod.key, "batch_size", "每批翻译标题数");
+            html += createNumberControl(mod.key, "batch_interval", "分批间隔 (秒)");
             break;
     }
 
@@ -1226,13 +1259,26 @@ window.copyResult = function() {
     const timelineEditor = document.getElementById('timeline-editor');
     const editor = currentTab === 'config' ? yamlEditor : currentTab === 'timeline' ? timelineEditor : frequencyEditor;
 
-    editor.select();
-    document.execCommand('copy');
-
+    const text = editor.value;
     const btn = document.querySelector('button[onclick="copyResult()"]');
     const original = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i>已复制!';
-    setTimeout(() => btn.innerHTML = original, 2000);
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            btn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i>已复制!';
+            setTimeout(() => btn.innerHTML = original, 2000);
+        }).catch(() => {
+            editor.select();
+            document.execCommand('copy');
+            btn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i>已复制!';
+            setTimeout(() => btn.innerHTML = original, 2000);
+        });
+    } else {
+        editor.select();
+        document.execCommand('copy');
+        btn.innerHTML = '<i class="fa-solid fa-check mr-1.5"></i>已复制!';
+        setTimeout(() => btn.innerHTML = original, 2000);
+    }
 }
 
 window.resetToDefault = function() {
@@ -3245,7 +3291,7 @@ window.checkVersion = async function() {
     btn.disabled = true;
 
     try {
-        const versionRes = await fetch(REMOTE_VERSION_URL);
+        const versionRes = await fetchWithFallback(REMOTE_VERSION_URL);
         if (!versionRes.ok) {
             throw new Error(`版本信息获取失败: ${versionRes.status}`);
         }
@@ -3595,11 +3641,11 @@ window.updateToLatest = async function() {
         return;
     }
 
-    showToast('正在从 GitHub 加载最新版本...', 'info');
+    showToast('正在加载最新版本...', 'info');
 
     try {
         const url = currentTab === 'config' ? REMOTE_CONFIG_URL : REMOTE_FREQUENCY_URL;
-        const res = await fetch(url);
+        const res = await fetchWithFallback(url);
 
         if (!res.ok) {
             throw new Error(`加载失败: ${res.status}`);
@@ -4674,7 +4720,8 @@ function findChildKey(lines, start, end, parentIndent, key) {
         const indent = line.search(/\S/);
         if (indent <= parentIndent) break;
         const m = line.match(/^\s*(\S+):\s*/);
-        if (m && m[1] === key && indent === parentIndent + 2) {
+        const rawKey = m ? m[1].replace(/^["']|["']$/g, '') : null;
+        if (m && rawKey === key && indent === parentIndent + 2) {
             return i;
         }
     }
@@ -4854,7 +4901,7 @@ function scrollTimelineEditorToPreset(presetName) {
 
     if (targetLine < 0) return;
 
-    const lineHeight = 19.5;
+    const lineHeight = EDITOR_LINE_HEIGHT;
     const scrollPosition = targetLine * lineHeight;
 
     // 设置光标位置
@@ -5014,7 +5061,11 @@ function buildEmptyPresetBlock(key, name, desc) {
  */
 function buildPresetYamlBlock(key, cfg) {
     const obj = { [key]: cfg };
-    const dumped = jsyaml.dump(obj, { indent: 2, lineWidth: -1, quotingType: '"', forceQuotes: false });
+    let dumped = jsyaml.dump(obj, { indent: 2, lineWidth: -1, quotingType: '"', forceQuotes: false });
+    // js-yaml 会把 week_map 的数字 key 序列化成带引号的字符串（"1".."7"），
+    // 而后端 scheduler 用整数 isoweekday() 读取 week_map，字符串 key 会导致启动校验失败、无法运行。
+    // 这里去掉纯数字 key 的引号，与手写模板（1: all_day）及后端期望的整数 key 保持一致。
+    dumped = dumped.replace(/^(\s*)"(\d+)":/gm, '$1$2:');
     return dumped.split('\n').map(l => l ? '  ' + l : l).join('\n');
 }
 

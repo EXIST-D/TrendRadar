@@ -125,19 +125,19 @@ class RSSParser:
 
     def _parse_json_feed_item(self, item_data: Dict[str, Any]) -> Optional[ParsedRSSItem]:
         """解析单个 JSON Feed 条目"""
-        # 标题：优先 title，否则使用 content_text 的前 100 字符
+        url = item_data.get("url", "") or item_data.get("external_url", "")
+
         title = item_data.get("title", "")
         if not title:
             content_text = item_data.get("content_text", "")
             if content_text:
-                title = content_text[:100] + ("..." if len(content_text) > 100 else "")
+                title = content_text[:20] + ("..." if len(content_text) > 20 else "")
 
         title = self._clean_text(title)
+        if not title and url:
+            title = url
         if not title:
             return None
-
-        # URL
-        url = item_data.get("url", "") or item_data.get("external_url", "")
 
         # 发布时间（ISO 8601 格式）
         published_at = None
@@ -216,12 +216,9 @@ class RSSParser:
     def _parse_entry(self, entry: Any) -> Optional[ParsedRSSItem]:
         """解析单个条目"""
         title = self._clean_text(entry.get("title", ""))
-        if not title:
-            return None
 
         url = entry.get("link", "")
         if not url:
-            # 尝试从 links 中获取
             links = entry.get("links", [])
             for link in links:
                 if link.get("rel") == "alternate" or link.get("type", "").startswith("text/html"):
@@ -229,6 +226,22 @@ class RSSParser:
                     break
             if not url and links:
                 url = links[0].get("href", "")
+
+        if not title:
+            raw_summary = entry.get("summary") or entry.get("description", "")
+            if not raw_summary:
+                content = entry.get("content", [])
+                if content and isinstance(content, list):
+                    raw_summary = content[0].get("value", "")
+            if raw_summary:
+                title = self._clean_text(raw_summary)
+                if len(title) > 20:
+                    title = title[:20] + "..."
+            if not title and url:
+                title = url
+
+        if not title:
+            return None
 
         published_at = self._parse_date(entry)
         summary = self._parse_summary(entry)

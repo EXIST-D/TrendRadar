@@ -8,7 +8,7 @@ HTML 报告渲染模块
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 
-from trendradar.report.helpers import html_escape
+from trendradar.report.helpers import html_escape, calculate_rank_trend
 from trendradar.utils.time import convert_time_for_display
 from trendradar.ai.formatter import render_ai_analysis_html_rich
 
@@ -86,6 +86,25 @@ def render_html_content(
                 padding: 32px 24px;
                 text-align: center;
                 position: relative;
+                overflow: visible;
+            }
+
+            .header-watermark {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: clamp(40px, 8vw, 80px);
+                font-weight: 900;
+                letter-spacing: 0.05em;
+                color: rgba(255, 255, 255, 0.15);
+                pointer-events: none;
+                z-index: 1;
+                white-space: nowrap;
+                -webkit-mask-image: radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+                mask-image: radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+                transition: -webkit-mask-image 0.3s ease, mask-image 0.3s ease;
+                user-select: none;
             }
 
             .save-buttons {
@@ -94,26 +113,32 @@ def render_html_content(
                 right: 16px;
                 display: flex;
                 gap: 8px;
+                z-index: 10;
+            }
+
+            .save-btn-group {
+                position: relative;
+                display: flex;
             }
 
             .save-btn {
                 background: rgba(255, 255, 255, 0.2);
                 border: 1px solid rgba(255, 255, 255, 0.3);
                 color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
+                padding: 10px 18px;
+                border-radius: 6px 0 0 6px;
                 cursor: pointer;
                 font-size: 13px;
                 font-weight: 500;
                 transition: all 0.2s ease;
                 backdrop-filter: blur(10px);
                 white-space: nowrap;
+                min-height: 38px;
+                border-right: none;
             }
 
             .save-btn:hover {
                 background: rgba(255, 255, 255, 0.3);
-                border-color: rgba(255, 255, 255, 0.5);
-                transform: translateY(-1px);
             }
 
             .save-btn:active {
@@ -125,13 +150,89 @@ def render_html_content(
                 cursor: not-allowed;
             }
 
+            .save-dropdown-trigger {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 10px;
+                border-radius: 0 6px 6px 0;
+                cursor: pointer;
+                font-size: 11px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                min-height: 38px;
+                display: flex;
+                align-items: center;
+            }
+
+            .save-dropdown-trigger:hover {
+                background: rgba(255, 255, 255, 0.35);
+            }
+
+            .save-dropdown-menu {
+                position: absolute;
+                top: 100%;
+                right: 0;
+                margin-top: 4px;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(16px);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 10px;
+                padding: 4px;
+                min-width: 140px;
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(-4px);
+                transition: all 0.2s ease;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            }
+
+            .save-btn-group:hover .save-dropdown-menu,
+            .save-dropdown-menu:hover {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+            }
+
+            .save-dropdown-item {
+                display: block;
+                width: 100%;
+                padding: 9px 14px;
+                background: none;
+                border: none;
+                color: #374151;
+                font-size: 13px;
+                cursor: pointer;
+                border-radius: 6px;
+                text-align: left;
+                transition: background 0.15s;
+                white-space: nowrap;
+            }
+
+            .save-dropdown-item:hover {
+                background: #f3f4f6;
+                color: #4f46e5;
+            }
+
+            .dropdown-icon {
+                width: 14px;
+                height: 14px;
+                margin-right: 8px;
+                vertical-align: -2px;
+                flex-shrink: 0;
+            }
+
             .header-title {
                 font-size: 22px;
                 font-weight: 700;
                 margin: 0 0 20px 0;
+                position: relative;
+                z-index: 2;
             }
 
             .header-info {
+                position: relative;
+                z-index: 2;
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 16px;
@@ -246,6 +347,33 @@ def render_html_content(
                 justify-content: center;
                 align-self: flex-start;
                 margin-top: 8px;
+                position: relative;
+                cursor: pointer;
+                transition: background 0.15s, color 0.15s;
+            }
+            .news-number .num-text { transition: opacity 0.15s; }
+            .news-number .copy-icon {
+                position: absolute;
+                opacity: 0;
+                transition: opacity 0.15s;
+            }
+            .news-item:hover .news-number .num-text { opacity: 0; }
+            .news-item:hover .news-number .copy-icon { opacity: 1; }
+            .news-item:hover .news-number {
+                background: #eef2ff;
+                color: #4f46e5;
+            }
+            .news-number.copied {
+                background: #dcfce7 !important;
+            }
+            .news-number.copied .num-text { opacity: 0 !important; }
+            .news-number.copied .copy-icon { opacity: 1 !important; }
+            body.dark-mode .news-item:hover .news-number {
+                background: #4338ca;
+                color: #e0e7ff;
+            }
+            body.dark-mode .news-number.copied {
+                background: #166534 !important;
             }
 
             .news-content {
@@ -294,6 +422,12 @@ def render_html_content(
 
             .rank-num.top { background: #dc2626; }
             .rank-num.high { background: #ea580c; }
+
+            .trend-up, .trend-down {
+                font-size: 12px;
+                margin-left: 2px;
+                vertical-align: middle;
+            }
 
             .time-info {
                 color: #999;
@@ -494,11 +628,14 @@ def render_html_content(
                     display: flex;
                     gap: 8px;
                     justify-content: center;
-                    flex-direction: column;
                     width: 100%;
+                }
+                .save-btn-group {
+                    flex: 1;
                 }
                 .save-btn {
                     width: 100%;
+                    border-radius: 6px 0 0 6px;
                 }
             }
 
@@ -732,67 +869,697 @@ def render_html_content(
                 color: #991b1b;
                 font-size: 14px;
             }
+
+            .ai-warning {
+                padding: 16px;
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                border-radius: 8px;
+                color: #92400e;
+                font-size: 14px;
+            }
+
+            .ai-info {
+                padding: 16px;
+                background: #f0f9ff;
+                border: 1px solid #bae6fd;
+                border-radius: 8px;
+                color: #0369a1;
+                font-size: 14px;
+            }
+
+            /* ===== 浏览器增强样式（渐进增强，邮件客户端无影响） ===== */
+
+            /* 宽屏模式 - 基础 */
+            body.wide-mode .container { max-width: 1200px; }
+            body.wide-mode .header-info { grid-template-columns: repeat(4, 1fr); }
+            body.wide-mode .content { padding: 32px 40px; }
+
+            /* 宽屏模式 - RSS feed-group 两列 */
+            body.wide-mode .rss-feeds-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .feed-group { margin-bottom: 0; }
+
+            /* 宽屏模式 - AI 分析区两列网格 */
+            body.wide-mode .ai-section .ai-blocks-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            body.wide-mode .ai-block { margin-bottom: 0; }
+
+            /* 宽屏模式 - 新增热点多列 */
+            body.wide-mode .new-section .new-sources-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .new-source-group { margin-bottom: 0; }
+
+            /* 宽屏模式 - 独立展示区多列 */
+            body.wide-mode .standalone-section .standalone-groups-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .standalone-group { margin-bottom: 0; }
+
+            /* Tab 栏 */
+            .tab-bar-wrapper {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background: white;
+                display: none;
+                margin-bottom: 20px;
+                align-items: stretch;
+                border-bottom: 2px solid #e5e7eb;
+            }
+            body.wide-mode .tab-bar-wrapper { display: flex; }
+            body.wide-mode .tab-bar-wrapper.tab-hidden { display: none; }
+
+            .tab-bar {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                overflow-x: auto;
+                white-space: nowrap;
+                padding: 8px 0 12px 0;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+                gap: 4px;
+                mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+            }
+            .tab-bar::-webkit-scrollbar { display: none; }
+            .tab-bar.scroll-start {
+                mask-image: linear-gradient(to right, black, black calc(100% - 24px), transparent);
+                -webkit-mask-image: linear-gradient(to right, black, black calc(100% - 24px), transparent);
+            }
+            .tab-bar.scroll-end {
+                mask-image: linear-gradient(to right, transparent, black 24px, black);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black);
+            }
+            .tab-bar.scroll-start.scroll-end,
+            .tab-bar.no-overflow {
+                mask-image: none;
+                -webkit-mask-image: none;
+            }
+
+            .tab-arrow {
+                flex-shrink: 0;
+                width: 28px;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: none;
+                color: #9ca3af;
+                font-size: 20px;
+                font-weight: 300;
+                cursor: pointer;
+                padding: 0;
+                transition: color 0.15s ease;
+            }
+            .tab-arrow:hover { color: #4f46e5; }
+            .tab-arrow.visible { display: flex; }
+
+            .tab-scroll-indicator {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 0;
+                height: 2px;
+                background: #4f46e5;
+                border-radius: 0 1px 1px 0;
+                transition: width 0.1s linear;
+            }
+
+            .tab-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 16px;
+                border: none;
+                background: #f3f4f6;
+                color: #6b7280;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                white-space: nowrap;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }
+            .tab-btn:hover { background: #e5e7eb; color: #374151; }
+            .tab-btn.active { background: #4f46e5; color: white; }
+            .tab-count {
+                font-size: 11px;
+                background: rgba(0,0,0,0.1);
+                padding: 1px 6px;
+                border-radius: 10px;
+            }
+            .tab-btn.active .tab-count { background: rgba(255,255,255,0.3); }
+
+            /* 搜索栏 */
+            .search-bar { display: none; padding: 0 0 16px 0; }
+            .search-input {
+                width: 100%;
+                padding: 10px 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                font-size: 14px;
+                outline: none;
+                transition: border-color 0.2s;
+                box-sizing: border-box;
+            }
+            .search-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+            .search-input::placeholder { color: #9ca3af; }
+
+            /* 右下角悬浮工具栏 */
+            .fab-bar {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                z-index: 100;
+                opacity: 0;
+                transform: translateY(10px);
+                transition: opacity 0.3s, transform 0.3s;
+                pointer-events: none;
+            }
+            .fab-bar.visible {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            .fab-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: #4f46e5;
+                color: white;
+                border: none;
+                cursor: pointer;
+                font-size: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                transition: transform 0.2s, background 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
+            .fab-btn:hover { transform: scale(1.1); background: #4338ca; }
+            body.dark-mode .fab-btn { background: #533483; }
+            body.dark-mode .fab-btn:hover { background: #6d28d9; }
+
+            /* 快捷键 tooltip */
+            .fab-tooltip {
+                position: absolute;
+                bottom: 0;
+                right: 52px;
+                background: rgba(30, 30, 50, 0.92);
+                backdrop-filter: blur(12px);
+                color: white;
+                border-radius: 10px;
+                padding: 12px 16px;
+                white-space: nowrap;
+                font-size: 12px;
+                line-height: 1.8;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.1);
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(6px);
+                transition: all 0.2s ease;
+                pointer-events: none;
+            }
+            .fab-btn:hover .fab-tooltip,
+            .fab-btn.show-tip .fab-tooltip {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            .fab-tooltip .tip-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 16px;
+                align-items: center;
+            }
+            .fab-tooltip .tip-key {
+                background: rgba(255,255,255,0.15);
+                border-radius: 3px;
+                padding: 1px 6px;
+                font-family: monospace;
+                font-size: 11px;
+                margin-left: 8px;
+            }
+
+            /* 折叠/展开 */
+            .collapse-icon {
+                display: none;
+                margin-right: 6px;
+                font-size: 12px;
+                color: #9ca3af;
+                transition: transform 0.2s;
+                user-select: none;
+            }
+            .word-header.collapsible { cursor: pointer; }
+            .word-header.collapsible .collapse-icon { display: inline; }
+            .word-header.collapsible:hover {
+                background: #f9fafb;
+                border-radius: 6px;
+                margin: 0 -8px 20px -8px;
+                padding: 8px;
+            }
+            .word-group.collapsed .news-item { display: none; }
+            .word-group.collapsed .collapse-icon { transform: rotate(-90deg); }
+
+            /* Tab 切换动画 */
+            body.wide-mode .word-group[data-tab-index] { animation: tabFadeIn 0.2s ease; }
+            @keyframes tabFadeIn {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* 宽屏切换按钮 */
+            .toggle-wide-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 15px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                line-height: 1;
+                min-height: 38px;
+            }
+            .toggle-wide-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+            }
+
+            /* ===== 暗色模式 ===== */
+            body.dark-mode {
+                background: #0f172a;
+                color: #e2e8f0;
+            }
+            body.dark-mode .container {
+                background: #1e293b;
+                box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+            }
+            body.dark-mode .header {
+                background: linear-gradient(135deg, #3730a3 0%, #7c3aed 100%);
+            }
+            body.dark-mode .content {
+                background: #1e293b;
+            }
+
+            /* 文字颜色 */
+            body.dark-mode .word-name,
+            body.dark-mode .new-section-title,
+            body.dark-mode .standalone-name,
+            body.dark-mode .new-item-title,
+            body.dark-mode .project-name { color: #f1f5f9; }
+            body.dark-mode .word-count,
+            body.dark-mode .word-index,
+            body.dark-mode .source-name,
+            body.dark-mode .time-info,
+            body.dark-mode .feed-count,
+            body.dark-mode .new-source-title,
+            body.dark-mode .standalone-count,
+            body.dark-mode .rss-section-count,
+            body.dark-mode .standalone-section-count,
+            body.dark-mode .news-meta,
+            body.dark-mode .rss-time,
+            body.dark-mode .rss-author,
+            body.dark-mode .rss-summary { color: #94a3b8; }
+            body.dark-mode .info-value { color: white; }
+
+            /* 链接 */
+            body.dark-mode .news-title a,
+            body.dark-mode .rss-title a,
+            body.dark-mode .new-item a,
+            body.dark-mode .standalone-item a,
+            body.dark-mode .rss-link { color: #93c5fd; }
+            body.dark-mode .news-title a:visited { color: #c4b5fd; }
+            body.dark-mode .rss-link:hover { color: #6ee7b7; }
+
+            /* 强调色 */
+            body.dark-mode .keyword-tag {
+                background: rgba(99,102,241,0.15);
+                color: #a5b4fc;
+            }
+            body.dark-mode .count-info { color: #6ee7b7; }
+            body.dark-mode .rss-source,
+            body.dark-mode .feed-name,
+            body.dark-mode .rss-section-title,
+            body.dark-mode .standalone-section-title { color: #6ee7b7; }
+
+            /* 边框与分割线 */
+            body.dark-mode .word-header,
+            body.dark-mode .news-item,
+            body.dark-mode .new-item,
+            body.dark-mode .standalone-item,
+            body.dark-mode .new-source-title,
+            body.dark-mode .standalone-header { border-bottom-color: #334155; }
+            body.dark-mode .section-divider { border-top-color: #334155; }
+            body.dark-mode .feed-header { border-bottom-color: #166534; }
+            body.dark-mode .tab-bar { border-bottom-color: #334155; }
+
+            /* 序号圆圈 */
+            body.dark-mode .news-number,
+            body.dark-mode .new-item-number {
+                background: #334155;
+                color: #94a3b8;
+            }
+
+            /* 折叠 hover */
+            body.dark-mode .word-header.collapsible:hover { background: #253347; }
+
+            /* Tab 栏 */
+            body.dark-mode .tab-bar-wrapper {
+                background: #1e293b;
+                border-bottom-color: #334155;
+            }
+            body.dark-mode .tab-arrow { color: #64748b; }
+            body.dark-mode .tab-arrow:hover { color: #c4b5fd; }
+            body.dark-mode .tab-scroll-indicator { background: #818cf8; }
+            body.dark-mode .tab-btn {
+                background: #334155;
+                color: #94a3b8;
+            }
+            body.dark-mode .tab-btn:hover {
+                background: #475569;
+                color: #e2e8f0;
+            }
+            body.dark-mode .tab-btn.active {
+                background: #6d28d9;
+                color: white;
+            }
+            body.dark-mode .tab-bar::-webkit-scrollbar-track { background: #1e293b; }
+            body.dark-mode .tab-bar::-webkit-scrollbar-thumb { background: #475569; }
+
+            /* 搜索框 */
+            body.dark-mode .search-input {
+                background: #1e293b;
+                border-color: #334155;
+                color: #e2e8f0;
+            }
+            body.dark-mode .search-input:focus {
+                border-color: #818cf8;
+                box-shadow: 0 0 0 3px rgba(129,140,248,0.15);
+            }
+            body.dark-mode .search-input::placeholder { color: #64748b; }
+
+            /* RSS 卡片 */
+            body.dark-mode .rss-item {
+                background: #1a2e25;
+                border-left-color: #059669;
+            }
+
+            /* AI 分析区 */
+            body.dark-mode .ai-section {
+                background: linear-gradient(135deg, #1e1b4b 0%, #1e293b 100%);
+                border-color: #334155;
+            }
+            body.dark-mode .ai-section-title { color: #a5b4fc; }
+            body.dark-mode .ai-section-badge { background: #4f46e5; }
+            body.dark-mode .ai-block {
+                background: #1e293b;
+                border-color: #334155;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            }
+            body.dark-mode .ai-block-title { color: #a5b4fc; }
+            body.dark-mode .ai-block-content { color: #cbd5e1; }
+            body.dark-mode .ai-warning {
+                background: #422006;
+                border-color: #854d0e;
+                color: #fbbf24;
+            }
+            body.dark-mode .ai-error {
+                background: #450a0a;
+                border-color: #991b1b;
+                color: #fca5a5;
+            }
+            body.dark-mode .ai-info {
+                background: #172554;
+                border-color: #1e40af;
+                color: #93c5fd;
+            }
+
+            /* 错误区 */
+            body.dark-mode .error-section {
+                background: #1c1917;
+                border-color: #78350f;
+            }
+            body.dark-mode .error-title { color: #fca5a5; }
+            body.dark-mode .error-item { color: #f87171; }
+
+            /* Footer */
+            body.dark-mode .footer {
+                background: #0f172a;
+                border-top-color: #334155;
+                color: #94a3b8;
+            }
+            body.dark-mode .footer-link { color: #93c5fd; }
+            body.dark-mode .footer-link:hover { color: #c4b5fd; }
+
+            /* 悬浮按钮 */
+            body.dark-mode .fab-btn { background: #6d28d9; }
+            body.dark-mode .fab-btn:hover { background: #7c3aed; }
+
+            /* 下拉菜单 */
+            body.dark-mode .save-dropdown-menu {
+                background: rgba(30,41,59,0.95);
+                border-color: #475569;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            }
+            body.dark-mode .save-dropdown-item {
+                color: #e2e8f0;
+            }
+            body.dark-mode .save-dropdown-item:hover {
+                background: #334155;
+                color: #c4b5fd;
+            }
+
+            /* 暗色模式切换按钮 */
+            .toggle-dark-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 15px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                line-height: 1;
+                min-height: 38px;
+            }
+            .toggle-dark-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+            }
+
+            /* 快捷键面板已集成到 fab-tooltip */
+
+            /* 阅读进度条 */
+            .reading-progress {
+                position: fixed;
+                top: 0; left: 0;
+                width: 0;
+                height: 3px;
+                background: linear-gradient(90deg, #4f46e5, #7c3aed);
+                z-index: 9999;
+                transition: width 0.1s linear;
+            }
+            body.dark-mode .reading-progress {
+                background: linear-gradient(90deg, #8ab4f8, #c58af9);
+            }
+
+            /* 复制按钮样式已集成到 .news-number */
+
+
+
+            /* 新上榜标记 */
+            .badge-new {
+                display: inline-block;
+                background: linear-gradient(135deg, #f43f5e, #ec4899);
+                color: white;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 1px 6px;
+                border-radius: 3px;
+                margin-left: 6px;
+                vertical-align: middle;
+                letter-spacing: 0.5px;
+            }
+            body.dark-mode .badge-new {
+                background: linear-gradient(135deg, #be185d, #9333ea);
+            }
         </style>
     </head>
     <body>
+        <div class="reading-progress"></div>
         <div class="container">
             <div class="header">
+                <div class="header-watermark">TrendRadar</div>
                 <div class="save-buttons">
-                    <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
-                    <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
+                    <button class="toggle-wide-btn" onclick="toggleWideMode()" title="切换宽屏/窄屏">⛶</button>
+                    <button class="toggle-dark-btn" onclick="toggleDarkMode()" title="切换暗色/亮色">☽</button>
+                    <div class="save-btn-group">
+                        <button class="save-btn" onclick="saveAsImage(event)">导出</button>
+                        <button class="save-dropdown-trigger">▾</button>
+                        <div class="save-dropdown-menu">
+                            <button class="save-dropdown-item" onclick="saveAsImage(event)"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="8" cy="7.5" r="2.5"/><path d="M12 4h.01"/></svg>整页截图</button>
+                            <button class="save-dropdown-item" onclick="saveAsMultipleImages(event)"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="10" height="10" rx="1.5"/><path d="M5 4V2.5A1.5 1.5 0 016.5 1h7A1.5 1.5 0 0115 2.5v7a1.5 1.5 0 01-1.5 1.5H12"/></svg>分段截图</button>
+                            <button class="save-dropdown-item" onclick="saveAsMarkdown()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 2h11A1.5 1.5 0 0115 3.5v9a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9A1.5 1.5 0 012.5 2z"/><path d="M4 11V5l2.5 3L9 5v6"/><path d="M11.5 8v3m0 0l-1.5-2m1.5 2l1.5-2"/></svg>Markdown</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="header-title">热点新闻分析</div>
-                <div class="header-info">
-                    <div class="info-item">
-                        <span class="info-label">报告类型</span>
-                        <span class="info-value">"""
-
-    # 处理报告类型显示（根据 mode 直接显示）
-    if mode == "current":
-        html += "当前榜单"
-    elif mode == "incremental":
-        html += "增量分析"
-    else:
-        html += "全天汇总"
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">新闻总数</span>
-                        <span class="info-value">"""
-
-    html += f"{total_titles} 条"
-
-    # 计算筛选后的热点新闻数量
-    hot_news_count = sum(len(stat["titles"]) for stat in report_data["stats"])
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">热点新闻</span>
-                        <span class="info-value">"""
-
-    html += f"{hot_news_count} 条"
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">生成时间</span>
-                        <span class="info-value">"""
+                <div class="header-info">"""
 
     # 使用提供的时间函数或默认 datetime.now
     if get_time_func:
         now = get_time_func()
     else:
         now = datetime.now()
-    html += now.strftime("%m-%d %H:%M")
 
-    html += """</span>
-                    </div>
+    # 处理报告类型显示
+    if mode == "current":
+        mode_display = "当前榜单"
+    elif mode == "incremental":
+        mode_display = "增量分析"
+    else:
+        mode_display = "全天汇总"
+
+    # 计算各项数据
+    hot_news_count = sum(len(stat["titles"]) for stat in report_data["stats"])
+    new_count = report_data.get("total_new_count", 0)
+
+    # 从元数据获取 RSS 和平台信息
+    hotlist_total = report_data.get("hotlist_total", total_titles)
+    platform_total = report_data.get("platform_total", 0)
+    failed_count = len(report_data.get("failed_ids", []))
+    platform_success = platform_total - failed_count if platform_total else 0
+    rss_matched = report_data.get("rss_matched_count", 0)
+    rss_total = report_data.get("rss_total_count", 0)
+    rss_source_total = report_data.get("rss_source_total", 0)
+    rss_source_failed = report_data.get("rss_source_failed", 0)
+    rss_source_success = max(0, rss_source_total - rss_source_failed)
+
+    # 1. 报告类型
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">报告类型</span>
+                        <span class="info-value">{mode_display}</span>
+                    </div>"""
+
+    # 2. 生成时间
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">生成时间</span>
+                        <span class="info-value">{now.strftime("%m-%d %H:%M")}</span>
+                    </div>"""
+
+    # 3. 热榜命中
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">热榜命中</span>
+                        <span class="info-value">{hot_news_count} / {hotlist_total}</span>
+                    </div>"""
+
+    # 4. RSS 命中
+    if rss_source_total > 0:
+        rss_value = f"{rss_matched} / {rss_total}"
+    else:
+        rss_value = "未启用"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">RSS 命中</span>
+                        <span class="info-value">{rss_value}</span>
+                    </div>"""
+
+    # 5. 热榜平台
+    if platform_total > 0:
+        platform_value = f"{platform_success}/{platform_total}"
+    else:
+        platform_value = "--"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">热榜平台</span>
+                        <span class="info-value">{platform_value}</span>
+                    </div>"""
+
+    # 6. RSS 源
+    if rss_source_total > 0:
+        rss_source_value = f"{rss_source_success}/{rss_source_total}"
+    else:
+        rss_source_value = "--"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">RSS 源</span>
+                        <span class="info-value">{rss_source_value}</span>
+                    </div>"""
+
+    # 7. 新增热点（热榜新增 + RSS 新增）
+    rss_new_count = sum(len(stat.get("titles", [])) for stat in (rss_new_items or []))
+    total_new = new_count + rss_new_count
+    new_value = f"{new_count} + {rss_new_count}" if total_new > 0 else "0"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">新增热点</span>
+                        <span class="info-value">{new_value}</span>
+                    </div>"""
+
+    # 8. AI 分析
+    if ai_analysis and getattr(ai_analysis, "success", False):
+        hotlist_analyzed = getattr(ai_analysis, "hotlist_analyzed", 0)
+        rss_analyzed = getattr(ai_analysis, "rss_analyzed", 0)
+        standalone_analyzed = getattr(ai_analysis, "standalone_analyzed", 0)
+        ai_include_rss = getattr(ai_analysis, "include_rss", True)
+        ai_include_standalone = getattr(ai_analysis, "include_standalone", False)
+
+        ai_parts = [str(hotlist_analyzed)]
+        if ai_include_rss:
+            ai_parts.append(str(rss_analyzed))
+        if ai_include_standalone:
+            ai_parts.append(str(standalone_analyzed))
+        ai_value = " + ".join(ai_parts) if sum(int(p) for p in ai_parts) > 0 else "0"
+    elif ai_analysis:
+        if getattr(ai_analysis, "skipped", False):
+            ai_value = "已跳过"
+        else:
+            ai_value = "待配置"
+    else:
+        ai_value = "未启用"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">AI 分析</span>
+                        <span class="info-value">{ai_value}</span>
+                    </div>"""
+
+    html += """
                 </div>
             </div>
 
-            <div class="content">"""
+            <div class="content">
+                <div class="search-bar">
+                    <input type="text" class="search-input" placeholder="搜索新闻标题..." oninput="handleSearch(this.value)">
+                </div>"""
 
     # 处理失败ID错误信息
     if report_data["failed_ids"]:
@@ -808,8 +1575,19 @@ def render_html_content(
 
     # 生成热点词汇统计部分的HTML
     stats_html = ""
+    tab_bar_html = ""
     if report_data["stats"]:
         total_count = len(report_data["stats"])
+
+        # 生成 Tab 栏 HTML
+        total_news_count = sum(s["count"] for s in report_data["stats"])
+        tab_bar_html = '<div class="tab-bar-wrapper"><div class="tab-bar">'
+        tab_bar_html += f'<button class="tab-btn" data-tab-index="all">全部<span class="tab-count">{total_news_count}</span></button>'
+        for tab_i, tab_stat in enumerate(report_data["stats"]):
+            escaped_tab_word = html_escape(tab_stat["word"])
+            tab_count = tab_stat["count"]
+            tab_bar_html += f'<button class="tab-btn" data-tab-index="{tab_i}">{escaped_tab_word}<span class="tab-count">{tab_count}</span></button>'
+        tab_bar_html += '</div></div>'
 
         for i, stat in enumerate(report_data["stats"], 1):
             count = stat["count"]
@@ -825,13 +1603,13 @@ def render_html_content(
             escaped_word = html_escape(stat["word"])
 
             stats_html += f"""
-                <div class="word-group">
+                <div class="word-group" data-tab-index="{i - 1}">
                     <div class="word-header">
                         <div class="word-info">
                             <div class="word-name">{escaped_word}</div>
                             <div class="word-count {count_class}">{count} 条</div>
                         </div>
-                        <div class="word-index">{i}/{total_count}</div>
+                        <div class="word-index"><span class="collapse-icon">▼</span>{i}/{total_count}</div>
                     </div>"""
 
             # 处理每个词组下的新闻标题，给每条新闻标上序号
@@ -875,7 +1653,16 @@ def render_html_content(
                     else:
                         rank_text = f"{min_rank}-{max_rank}"
 
-                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
+                    # 计算趋势箭头
+                    rank_timeline = title_data.get("rank_timeline", [])
+                    trend = calculate_rank_trend(rank_timeline, ranks)
+                    trend_html = ""
+                    if trend == "up":
+                        trend_html = '<span class="trend-up">📈</span>'
+                    elif trend == "down":
+                        trend_html = '<span class="trend-down">📉</span>'
+
+                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>{trend_html}'
 
                 # 处理时间显示
                 time_display = title_data.get("time_display", "")
@@ -920,7 +1707,7 @@ def render_html_content(
     # 给热榜统计添加外层包装
     if stats_html:
         stats_html = f"""
-                <div class="hotlist-section">{stats_html}
+                <div class="hotlist-section">{tab_bar_html}{stats_html}
                 </div>"""
 
     # 生成新增新闻区域的HTML
@@ -928,7 +1715,8 @@ def render_html_content(
     if show_new_section and report_data["new_titles"]:
         new_titles_html += f"""
                 <div class="new-section">
-                    <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>"""
+                    <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>
+                    <div class="new-sources-grid">"""
 
         for source_data in report_data["new_titles"]:
             escaped_source = html_escape(source_data["source_name"])
@@ -984,6 +1772,7 @@ def render_html_content(
                     </div>"""
 
         new_titles_html += """
+                    </div>
                 </div>"""
 
     # 生成 RSS 统计内容
@@ -1025,7 +1814,8 @@ def render_html_content(
                     <div class="rss-section-header">
                         <div class="rss-section-title">{title}</div>
                         <div class="rss-section-count">{total_count} 条</div>
-                    </div>"""
+                    </div>
+                    <div class="rss-feeds-grid">"""
 
         # 按关键词分组渲染（与热榜格式一致）
         for stat in stats:
@@ -1082,6 +1872,7 @@ def render_html_content(
                     </div>"""
 
         rss_html += """
+                    </div>
                 </div>"""
         return rss_html
 
@@ -1145,6 +1936,17 @@ def render_html_content(
         if total_count == 0:
             return ""
 
+        # 收集所有分组信息用于生成 tab
+        all_groups = []
+        for p in platforms:
+            items = p.get("items", [])
+            if items:
+                all_groups.append({"name": p.get("name", p.get("id", "")), "count": len(items)})
+        for f in rss_feeds:
+            items = f.get("items", [])
+            if items:
+                all_groups.append({"name": f.get("name", f.get("id", "")), "count": len(items)})
+
         standalone_html = f"""
                 <div class="standalone-section">
                     <div class="standalone-section-header">
@@ -1152,6 +1954,22 @@ def render_html_content(
                         <div class="standalone-section-count">{total_count} 条</div>
                     </div>"""
 
+        # 生成 tab 栏（2+ 分组时）
+        if len(all_groups) >= 2:
+            standalone_html += """
+                    <div class="tab-bar standalone-tab-bar">"""
+            for idx, g in enumerate(all_groups):
+                active = ' active' if idx == 0 else ''
+                standalone_html += f"""
+                        <button class="tab-btn{active}" data-standalone-tab="{idx}">{html_escape(g["name"])}<span class="tab-count">{g["count"]}</span></button>"""
+            standalone_html += f"""
+                        <button class="tab-btn" data-standalone-tab="all">全部<span class="tab-count">{total_count}</span></button>
+                    </div>"""
+
+        standalone_html += """
+                    <div class="standalone-groups-grid">"""
+
+        group_idx = 0
         # 渲染热榜平台（复用 word-group 结构）
         for platform in platforms:
             platform_name = platform.get("name", platform.get("id", ""))
@@ -1160,7 +1978,7 @@ def render_html_content(
                 continue
 
             standalone_html += f"""
-                    <div class="standalone-group">
+                    <div class="standalone-group" data-standalone-tab="{group_idx}">
                         <div class="standalone-header">
                             <div class="standalone-name">{html_escape(platform_name)}</div>
                             <div class="standalone-count">{len(items)} 条</div>
@@ -1242,6 +2060,7 @@ def render_html_content(
 
             standalone_html += """
                     </div>"""
+            group_idx += 1
 
         # 渲染 RSS 源（复用相同结构）
         for feed in rss_feeds:
@@ -1251,7 +2070,7 @@ def render_html_content(
                 continue
 
             standalone_html += f"""
-                    <div class="standalone-group">
+                    <div class="standalone-group" data-standalone-tab="{group_idx}">
                         <div class="standalone-header">
                             <div class="standalone-name">{html_escape(feed_name)}</div>
                             <div class="standalone-count">{len(items)} 条</div>
@@ -1305,8 +2124,10 @@ def render_html_content(
 
             standalone_html += """
                     </div>"""
+            group_idx += 1
 
         standalone_html += """
+                    </div>
                 </div>"""
         return standalone_html
 
@@ -1384,10 +2205,349 @@ def render_html_content(
             </div>
         </div>
 
+        <div class="fab-bar">
+            <button class="fab-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="返回顶部">↑</button>
+            <button class="fab-btn fab-help">
+                <span>?</span>
+                <div class="fab-tooltip">
+                    <div class="tip-row"><span>切换宽屏</span><span class="tip-key">W</span></div>
+                    <div class="tip-row"><span>暗色模式</span><span class="tip-key">D</span></div>
+                    <div class="tip-row"><span>搜索</span><span class="tip-key">/</span></div>
+                    <div class="tip-row"><span>上一个 Tab</span><span class="tip-key">←</span></div>
+                    <div class="tip-row"><span>下一个 Tab</span><span class="tip-key">→</span></div>
+                    <div class="tip-row"><span>序号可复制</span><span class="tip-key">点击</span></div>
+                </div>
+            </button>
+        </div>
+
         <script>
-            async function saveAsImage() {
-                const button = event.target;
-                const originalText = button.textContent;
+            // ===== 浏览器增强功能 =====
+
+            function toggleWideMode() {
+                document.body.classList.toggle('wide-mode');
+                var isWide = document.body.classList.contains('wide-mode');
+                try { localStorage.setItem('trendradar-wide-mode', isWide ? '1' : '0'); } catch(e) {}
+                var btn = document.querySelector('.toggle-wide-btn');
+                if (btn) btn.textContent = isWide ? '⊡' : '⛶';
+                initTabVisibility();
+                initCollapseVisibility();
+                initStandaloneTabVisibility();
+            }
+
+            function toggleDarkMode() {
+                var isDark = document.body.classList.toggle('dark-mode');
+                try { localStorage.setItem('trendradar-dark-mode', isDark ? '1' : '0'); } catch(e) {}
+                var btn = document.querySelector('.toggle-dark-btn');
+                if (btn) btn.textContent = isDark ? '☀' : '☽';
+            }
+
+            function initTabScroll(tabBar) {
+                var wrapper = tabBar.closest('.tab-bar-wrapper') || tabBar.parentNode;
+                var leftArrow = wrapper.querySelector('.tab-arrow-left');
+                var rightArrow = wrapper.querySelector('.tab-arrow-right');
+                var indicator = wrapper.querySelector('.tab-scroll-indicator');
+                if (!leftArrow) {
+                    leftArrow = document.createElement('button');
+                    leftArrow.className = 'tab-arrow tab-arrow-left';
+                    leftArrow.innerHTML = '‹';
+                    rightArrow = document.createElement('button');
+                    rightArrow.className = 'tab-arrow tab-arrow-right';
+                    rightArrow.innerHTML = '›';
+                    indicator = document.createElement('div');
+                    indicator.className = 'tab-scroll-indicator';
+                    wrapper.insertBefore(leftArrow, tabBar);
+                    tabBar.after(rightArrow);
+                    wrapper.appendChild(indicator);
+                }
+                var scrollStep = 200;
+                leftArrow.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    tabBar.scrollBy({ left: -scrollStep, behavior: 'smooth' });
+                });
+                rightArrow.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    tabBar.scrollBy({ left: scrollStep, behavior: 'smooth' });
+                });
+                function updateArrows() {
+                    var sl = tabBar.scrollLeft;
+                    var sw = tabBar.scrollWidth;
+                    var cw = tabBar.clientWidth;
+                    var noOverflow = sw <= cw + 1;
+                    var atStart = sl <= 1;
+                    var atEnd = sl + cw >= sw - 1;
+                    leftArrow.classList.toggle('visible', !noOverflow && !atStart);
+                    rightArrow.classList.toggle('visible', !noOverflow && !atEnd);
+                    tabBar.classList.toggle('scroll-start', atStart);
+                    tabBar.classList.toggle('scroll-end', atEnd);
+                    tabBar.classList.toggle('no-overflow', noOverflow);
+                    var progress = noOverflow ? 0 : sl / (sw - cw);
+                    indicator.style.width = (progress * 100) + '%';
+                }
+                tabBar.addEventListener('scroll', updateArrows, { passive: true });
+                tabBar.addEventListener('wheel', function(e) {
+                    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                        tabBar.scrollLeft += e.deltaY;
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                updateArrows();
+                new ResizeObserver(updateArrows).observe(tabBar);
+            }
+
+            function initTabs() {
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var tabBar = wrapper ? wrapper.querySelector('.tab-bar') : null;
+                if (!tabBar) return;
+                var tabs = tabBar.querySelectorAll('.tab-btn');
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                initTabVisibility();
+                initTabScroll(tabBar);
+
+                function activateTab(index, scroll) {
+                    tabs.forEach(function(t) { t.classList.remove('active'); });
+                    if (index === 'all') {
+                        var allBtn = tabBar.querySelector('[data-tab-index="all"]');
+                        if (allBtn) {
+                            allBtn.classList.add('active');
+                            if (scroll !== false) allBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                        }
+                        groups.forEach(function(g) { g.style.display = ''; });
+                        try { history.replaceState(null, '', '#all'); } catch(e) {}
+                        return;
+                    }
+                    var idx = parseInt(index);
+                    tabs.forEach(function(t) {
+                        if (parseInt(t.dataset.tabIndex) === idx) t.classList.add('active');
+                    });
+                    if (document.body.classList.contains('wide-mode') && !wrapper.classList.contains('tab-hidden')) {
+                        groups.forEach(function(g) {
+                            g.style.display = (parseInt(g.dataset.tabIndex) === idx) ? '' : 'none';
+                        });
+                    }
+                    var activeBtn = tabBar.querySelector('.tab-btn.active');
+                    if (scroll !== false && activeBtn) activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                    try { history.replaceState(null, '', '#tab-' + idx); } catch(e) {}
+                }
+
+                tabs.forEach(function(tab) {
+                    tab.addEventListener('click', function() {
+                        var idx = tab.dataset.tabIndex;
+                        activateTab(idx === 'all' ? 'all' : parseInt(idx));
+                    });
+                });
+
+                tabBar.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                        var tabsArr = Array.from(tabs);
+                        var ci = tabsArr.findIndex(function(t) { return t.classList.contains('active'); });
+                        var dir = e.key === 'ArrowRight' ? 1 : -1;
+                        var ni = Math.max(0, Math.min(tabsArr.length - 1, ci + dir));
+                        var nt = tabsArr[ni];
+                        activateTab(nt.dataset.tabIndex === 'all' ? 'all' : parseInt(nt.dataset.tabIndex));
+                        nt.focus();
+                        e.preventDefault();
+                    }
+                });
+
+                var hash = window.location.hash;
+                if (hash === '#all') { activateTab('all'); }
+                else if (hash.indexOf('#tab-') === 0) { activateTab(parseInt(hash.replace('#tab-', ''))); }
+                else { activateTab(0, false); }
+            }
+
+            function initTabVisibility() {
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                if (!wrapper) return;
+                var tabBar = wrapper.querySelector('.tab-bar');
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                var isWide = document.body.classList.contains('wide-mode');
+                if (!isWide || groups.length <= 2) {
+                    wrapper.classList.add('tab-hidden');
+                    groups.forEach(function(g) { g.style.display = ''; });
+                } else {
+                    wrapper.classList.remove('tab-hidden');
+                    var activeTab = tabBar.querySelector('.tab-btn.active');
+                    if (activeTab) { activeTab.click(); }
+                    else {
+                        var firstTab = tabBar.querySelector('.tab-btn[data-tab-index="0"]');
+                        if (firstTab) firstTab.click();
+                    }
+                }
+            }
+
+            var handleSearch = (function() {
+                var timer = null;
+                return function(query) {
+                    clearTimeout(timer);
+                    timer = setTimeout(function() {
+                        query = query.toLowerCase();
+                        document.querySelectorAll('.news-item').forEach(function(item) {
+                            var title = (item.querySelector('.news-title') || {}).textContent || '';
+                            item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                        });
+                        document.querySelectorAll('.rss-item').forEach(function(item) {
+                            var title = (item.querySelector('.rss-title') || {}).textContent || '';
+                            item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                        });
+                    }, 200);
+                };
+            })();
+
+            function initBackToTop() {
+                var fabBar = document.querySelector('.fab-bar');
+                if (!fabBar) return;
+                var ticking = false;
+                window.addEventListener('scroll', function() {
+                    if (!ticking) {
+                        requestAnimationFrame(function() {
+                            fabBar.classList.toggle('visible', window.scrollY > 300);
+                            ticking = false;
+                        });
+                        ticking = true;
+                    }
+                });
+            }
+
+            function initCollapse() {
+                document.querySelectorAll('.word-header').forEach(function(header) {
+                    header.addEventListener('click', function() {
+                        var wrapper = document.querySelector('.tab-bar-wrapper');
+                        if (document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden')) return;
+                        var group = header.closest('.word-group');
+                        if (group) group.classList.toggle('collapsed');
+                    });
+                });
+                initCollapseVisibility();
+            }
+
+            function initCollapseVisibility() {
+                var headers = document.querySelectorAll('.word-header');
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var isTabMode = document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden');
+                headers.forEach(function(h) {
+                    if (isTabMode) { h.classList.remove('collapsible'); }
+                    else { h.classList.add('collapsible'); }
+                });
+                if (isTabMode) {
+                    document.querySelectorAll('.word-group.collapsed').forEach(function(g) {
+                        g.classList.remove('collapsed');
+                    });
+                }
+            }
+
+            // 独立展示区 Tab 切换
+            function initStandaloneTabs() {
+                var tabBar = document.querySelector('.standalone-tab-bar');
+                if (!tabBar) return;
+                var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                var btns = tabBar.querySelectorAll('.tab-btn[data-standalone-tab]');
+                initTabScroll(tabBar);
+
+                function activateStandaloneTab(val) {
+                    btns.forEach(function(b) {
+                        var bVal = b.getAttribute('data-standalone-tab');
+                        b.classList.toggle('active', bVal === String(val));
+                    });
+                    groups.forEach(function(g) {
+                        var gVal = g.getAttribute('data-standalone-tab');
+                        g.style.display = (val === 'all' || gVal === String(val)) ? '' : 'none';
+                    });
+                }
+
+                btns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        activateStandaloneTab(btn.getAttribute('data-standalone-tab'));
+                    });
+                });
+
+                // 初始状态
+                initStandaloneTabVisibility();
+            }
+
+            function initStandaloneTabVisibility() {
+                var tabBar = document.querySelector('.standalone-tab-bar');
+                if (!tabBar) return;
+                var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                var isWide = document.body.classList.contains('wide-mode');
+                if (!isWide || groups.length <= 1) {
+                    tabBar.classList.add('tab-hidden');
+                    groups.forEach(function(g) { g.style.display = ''; });
+                } else {
+                    tabBar.classList.remove('tab-hidden');
+                    var activeBtn = tabBar.querySelector('.tab-btn.active');
+                    if (activeBtn) activeBtn.click();
+                    else { var first = tabBar.querySelector('.tab-btn'); if (first) first.click(); }
+                }
+            }
+
+            function prepareForScreenshot() {
+                var state = {
+                    wasWide: document.body.classList.contains('wide-mode'),
+                    hiddenGroups: []
+                };
+                document.body.classList.remove('wide-mode');
+                state.wasDark = document.body.classList.contains('dark-mode');
+                document.body.classList.remove('dark-mode');
+                document.querySelectorAll('.word-group[data-tab-index]').forEach(function(g, i) {
+                    if (g.style.display === 'none') {
+                        state.hiddenGroups.push(i);
+                        g.style.display = '';
+                    }
+                });
+                state.hiddenStandaloneGroups = [];
+                document.querySelectorAll('.standalone-group[data-standalone-tab]').forEach(function(g, i) {
+                    if (g.style.display === 'none') {
+                        state.hiddenStandaloneGroups.push(i);
+                        g.style.display = '';
+                    }
+                });
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                    el.dataset.prevDisplay = el.style.display || '';
+                    el.style.display = 'none';
+                });
+                document.querySelectorAll('.toggle-dark-btn').forEach(function(el) {
+                    el.dataset.prevDisplay = el.style.display || ''; el.style.display = 'none';
+                });
+                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = 'none'; });
+                document.querySelectorAll('.header-watermark').forEach(function(el) { el.style.display = 'none'; });
+                return state;
+            }
+
+            function restoreAfterScreenshot(state) {
+                if (state.wasWide) document.body.classList.add('wide-mode');
+                if (state.wasDark) document.body.classList.add('dark-mode');
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                state.hiddenGroups.forEach(function(i) {
+                    if (groups[i]) groups[i].style.display = 'none';
+                });
+                var standaloneGroups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                if (state.hiddenStandaloneGroups) {
+                    state.hiddenStandaloneGroups.forEach(function(i) {
+                        if (standaloneGroups[i]) standaloneGroups[i].style.display = 'none';
+                    });
+                }
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                    el.style.display = el.dataset.prevDisplay || '';
+                    delete el.dataset.prevDisplay;
+                });
+                document.querySelectorAll('.toggle-dark-btn').forEach(function(el) {
+                    el.style.display = el.dataset.prevDisplay || ''; delete el.dataset.prevDisplay;
+                });
+                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = ''; });
+                document.querySelectorAll('.header-watermark').forEach(function(el) { el.style.display = ''; });
+                initTabVisibility();
+                initCollapseVisibility();
+                initStandaloneTabVisibility();
+                var fabBar = document.querySelector('.fab-bar');
+                if (fabBar && window.scrollY > 300) fabBar.classList.add('visible');
+            }
+
+            // ===== 截图功能 =====
+
+            async function saveAsImage(e) {
+                const button = e.target.closest('.save-dropdown-item') || e.target;
+                const originalHTML = button.innerHTML;
+                var screenshotState = null;
 
                 try {
                     button.textContent = '生成中...';
@@ -1396,6 +2556,9 @@ def render_html_content(
 
                     // 等待页面稳定
                     await new Promise(resolve => setTimeout(resolve, 200));
+
+                    // 截图前准备：切回窄屏布局
+                    screenshotState = prepareForScreenshot();
 
                     // 截图前隐藏按钮
                     const buttons = document.querySelector('.save-buttons');
@@ -1426,6 +2589,7 @@ def render_html_content(
                     });
 
                     buttons.style.visibility = 'visible';
+                    restoreAfterScreenshot(screenshotState);
 
                     const link = document.createElement('a');
                     const now = new Date();
@@ -1441,29 +2605,32 @@ def render_html_content(
 
                     button.textContent = '保存成功!';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
 
                 } catch (error) {
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    if (screenshotState) { restoreAfterScreenshot(screenshotState); }
                     button.textContent = '保存失败';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
                 }
             }
 
-            async function saveAsMultipleImages() {
-                const button = event.target;
-                const originalText = button.textContent;
+            async function saveAsMultipleImages(e) {
+                const button = e.target.closest('.save-dropdown-item') || e.target;
+                const originalHTML = button.innerHTML;
                 const container = document.querySelector('.container');
                 const scale = 1.5;
                 const maxHeight = 5000 / scale;
+                var screenshotState2 = null;
 
                 try {
+                    screenshotState2 = prepareForScreenshot();
                     button.textContent = '分析中...';
                     button.disabled = true;
 
@@ -1670,8 +2837,9 @@ def render_html_content(
                     }
 
                     button.textContent = `已保存 ${segments.length} 张图片!`;
+                    restoreAfterScreenshot(screenshotState2);
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
 
@@ -1679,16 +2847,371 @@ def render_html_content(
                     console.error('分段保存失败:', error);
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    if (screenshotState2) { restoreAfterScreenshot(screenshotState2); }
                     button.textContent = '保存失败';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
                 }
             }
 
+            function saveAsMarkdown() {
+                var lines = [];
+                var now = new Date();
+                var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                var timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+                // 标题
+                var headerTitle = document.querySelector('.header-title');
+                lines.push('# ' + (headerTitle ? headerTitle.textContent.trim() : 'TrendRadar'));
+                lines.push('');
+
+                // 报告元信息
+                var infoItems = document.querySelectorAll('.header-info .info-item');
+                if (infoItems.length) {
+                    infoItems.forEach(function(item) {
+                        var label = item.querySelector('.info-label');
+                        var value = item.querySelector('.info-value');
+                        if (label && value) {
+                            lines.push('- **' + label.textContent.trim() + '**: ' + value.textContent.trim());
+                        }
+                    });
+                    lines.push('');
+                }
+
+                // 提取 news-item 通用函数
+                function extractItem(item, idx) {
+                    var titleEl = item.querySelector('.news-title a');
+                    var titleText = '';
+                    var url = '';
+                    if (titleEl) {
+                        titleText = titleEl.textContent.trim();
+                        url = titleEl.href || '';
+                    } else {
+                        var titleDiv = item.querySelector('.news-title') || item.querySelector('.new-item-title');
+                        if (titleDiv) titleText = titleDiv.textContent.trim();
+                    }
+                    if (!titleText) return '';
+
+                    var meta = [];
+                    var rank = item.querySelector('.rank-num, .new-item-rank');
+                    if (rank && rank.textContent.trim() && rank.textContent.trim() !== '?') meta.push('#' + rank.textContent.trim());
+                    var source = item.querySelector('.source-name');
+                    if (source) meta.push(source.textContent.trim());
+                    var keyword = item.querySelector('.keyword-tag');
+                    if (keyword) meta.push(keyword.textContent.trim());
+                    var time = item.querySelector('.time-info');
+                    if (time) meta.push(time.textContent.trim());
+                    var count = item.querySelector('.count-info');
+                    if (count) meta.push(count.textContent.trim());
+
+                    var line = idx + '. ';
+                    if (url) {
+                        line += '[' + titleText.replace(/[[\\]]/g, '') + '](' + url + ')';
+                    } else {
+                        line += titleText;
+                    }
+                    if (meta.length) line += '  `' + meta.join(' | ') + '`';
+                    return line;
+                }
+
+                // 热点关键词区
+                var wordGroups = document.querySelectorAll('.hotlist-section > .word-group');
+                if (wordGroups.length) {
+                    lines.push('## 热点新闻');
+                    lines.push('');
+                    wordGroups.forEach(function(group) {
+                        var wordName = group.querySelector('.word-name');
+                        var wordCount = group.querySelector('.word-count');
+                        if (wordName) {
+                            lines.push('### ' + wordName.textContent.trim() + (wordCount ? ' (' + wordCount.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.news-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // 新增热点区
+                var newSection = document.querySelector('.new-section');
+                if (newSection) {
+                    var newTitle = newSection.querySelector('.new-section-title');
+                    lines.push('## ' + (newTitle ? newTitle.textContent.trim() : '本次新增热点'));
+                    lines.push('');
+                    var sourceGroups = newSection.querySelectorAll('.new-source-group');
+                    sourceGroups.forEach(function(sg) {
+                        var srcTitle = sg.querySelector('.new-source-title');
+                        if (srcTitle) {
+                            lines.push('### ' + srcTitle.textContent.trim());
+                            lines.push('');
+                        }
+                        var items = sg.querySelectorAll('.new-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // RSS 订阅更新区
+                var rssSection = document.querySelector('.rss-section');
+                if (rssSection) {
+                    var rssSectionTitle = rssSection.querySelector('.rss-section-title');
+                    lines.push('## ' + (rssSectionTitle ? rssSectionTitle.textContent.trim() : 'RSS 订阅更新'));
+                    lines.push('');
+                    var feedGroups = rssSection.querySelectorAll('.feed-group');
+                    feedGroups.forEach(function(group) {
+                        var feedName = group.querySelector('.feed-name');
+                        var feedCount = group.querySelector('.feed-count');
+                        if (feedName) {
+                            lines.push('### ' + feedName.textContent.trim() + (feedCount ? ' (' + feedCount.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.rss-item');
+                        items.forEach(function(item, i) {
+                            var titleEl = item.querySelector('.rss-title a');
+                            var titleText = titleEl ? titleEl.textContent.trim() : '';
+                            var url = titleEl ? (titleEl.href || '') : '';
+                            if (!titleText) return;
+                            var meta = [];
+                            var time = item.querySelector('.rss-time');
+                            if (time) meta.push(time.textContent.trim());
+                            var author = item.querySelector('.rss-author');
+                            if (author) meta.push(author.textContent.trim());
+                            var line = (i + 1) + '. ';
+                            if (url) { line += '[' + titleText.replace(/[\\[\\]]/g, '') + '](' + url + ')'; }
+                            else { line += titleText; }
+                            if (meta.length) line += '  `' + meta.join(' | ') + '`';
+                            lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // AI 热点分析区
+                var aiSection = document.querySelector('.ai-section');
+                if (aiSection) {
+                    var aiError = aiSection.querySelector('.ai-error') || aiSection.querySelector('.ai-warning');
+                    var aiInfo = aiSection.querySelector('.ai-info');
+                    if (aiError) {
+                        lines.push('## AI 分析');
+                        lines.push('');
+                        lines.push('> ' + aiError.textContent.trim());
+                        lines.push('');
+                    } else if (aiInfo) {
+                        // 跳过 info 提示（如"跳过"）
+                    } else {
+                        var aiTitle = aiSection.querySelector('.ai-section-title');
+                        lines.push('## ' + (aiTitle ? aiTitle.textContent.trim() : 'AI 热点分析'));
+                        lines.push('');
+                        var aiBlocks = aiSection.querySelectorAll('.ai-block');
+                        aiBlocks.forEach(function(block) {
+                            var blockTitle = block.querySelector('.ai-block-title');
+                            var blockContent = block.querySelector('.ai-block-content');
+                            if (blockTitle) {
+                                lines.push('### ' + blockTitle.textContent.trim());
+                                lines.push('');
+                            }
+                            if (blockContent) {
+                                lines.push(blockContent.textContent.trim());
+                                lines.push('');
+                            }
+                        });
+                    }
+                }
+
+                // 独立展示区（热榜平台 + RSS）
+                var standaloneSection = document.querySelector('.standalone-section');
+                if (standaloneSection) {
+                    var standaloneTitle = standaloneSection.querySelector('.standalone-section-title');
+                    lines.push('## ' + (standaloneTitle ? standaloneTitle.textContent.trim() : '独立展示区'));
+                    lines.push('');
+                    var groups = standaloneSection.querySelectorAll('.standalone-group');
+                    groups.forEach(function(group) {
+                        var name = group.querySelector('.standalone-name');
+                        var cnt = group.querySelector('.standalone-count');
+                        if (name) {
+                            lines.push('### ' + name.textContent.trim() + (cnt ? ' (' + cnt.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.news-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // 错误区
+                var errorSection = document.querySelector('.error-section');
+                if (errorSection) {
+                    var errorItems = errorSection.querySelectorAll('.error-item');
+                    if (errorItems.length) {
+                        lines.push('## 抓取异常');
+                        lines.push('');
+                        errorItems.forEach(function(item) {
+                            lines.push('- ' + item.textContent.trim());
+                        });
+                        lines.push('');
+                    }
+                }
+
+                // 页脚
+                lines.push('---');
+                lines.push('*Generated by TrendRadar*');
+
+                // 下载
+                var md = lines.join('\\n');
+                var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                var link = document.createElement('a');
+                var filename = 'TrendRadar_' + dateStr + '_' + timeStr.replace(':', '') + '.md';
+                link.download = filename;
+                link.href = URL.createObjectURL(blob);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+            }
+
             document.addEventListener('DOMContentLoaded', function() {
                 window.scrollTo(0, 0);
+
+                // 自动检测宽屏模式
+                var savedMode = null;
+                try { savedMode = localStorage.getItem('trendradar-wide-mode'); } catch(e) {}
+                if (savedMode === '1' || (savedMode === null && window.innerWidth > 768)) {
+                    document.body.classList.add('wide-mode');
+                    var btn = document.querySelector('.toggle-wide-btn');
+                    if (btn) btn.textContent = '⊡';
+                }
+
+                // 暗色模式恢复
+                var savedDark = null;
+                try { savedDark = localStorage.getItem('trendradar-dark-mode'); } catch(e) {}
+                if (savedDark === '1') {
+                    document.body.classList.add('dark-mode');
+                    var darkBtn = document.querySelector('.toggle-dark-btn');
+                    if (darkBtn) darkBtn.textContent = '☀';
+                }
+
+                // 启用搜索栏
+                var searchBar = document.querySelector('.search-bar');
+                if (searchBar) searchBar.style.display = 'block';
+
+                // 初始化增强功能
+                initTabs();
+                initBackToTop();
+                initCollapse();
+                initStandaloneTabs();
+
+                // 键盘快捷键
+                document.addEventListener('keydown', function(e) {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    var helpBtn = document.querySelector('.fab-help');
+                    switch(e.key) {
+                        case '?':
+                            if (helpBtn) {
+                                helpBtn.classList.toggle('show-tip');
+                                var fabBar = document.querySelector('.fab-bar');
+                                if (fabBar) fabBar.classList.add('visible');
+                            }
+                            break;
+                        case 'Escape':
+                            if (helpBtn) helpBtn.classList.remove('show-tip');
+                            break;
+                        case 'w': case 'W': toggleWideMode(); break;
+                        case 'd': case 'D': toggleDarkMode(); break;
+                        case '/': e.preventDefault(); var si = document.querySelector('.search-input'); if (si) si.focus(); break;
+                    }
+                });
+
+                // 阅读进度条
+                var progressBar = document.querySelector('.reading-progress');
+                if (progressBar) {
+                    var progressTicking = false;
+                    window.addEventListener('scroll', function() {
+                        if (!progressTicking) {
+                            requestAnimationFrame(function() {
+                                var h = document.documentElement.scrollHeight - window.innerHeight;
+                                progressBar.style.width = (h > 0 ? (window.scrollY / h * 100) : 0) + '%';
+                                progressTicking = false;
+                            });
+                            progressTicking = true;
+                        }
+                    });
+                }
+
+                // 一键复制：hover 时数字变复制图标
+                var copySvg = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>';
+                var checkSvg = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#22c55e" stroke-width="2"><path d="M3 8.5l3.5 3.5 7-7"/></svg>';
+                document.querySelectorAll('.news-item .news-number').forEach(function(numEl) {
+                    var item = numEl.closest('.news-item');
+                    var titleEl = item ? item.querySelector('.news-title a') : null;
+                    if (!titleEl) return;
+                    var numText = numEl.textContent.trim();
+                    numEl.innerHTML = '<span class="num-text">' + numText + '</span><span class="copy-icon">' + copySvg + '</span>';
+                    numEl.title = '点击复制标题和链接';
+                    numEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var text = titleEl.textContent.trim() + ' ' + titleEl.href;
+                        function onCopySuccess() {
+                            numEl.classList.add('copied');
+                            numEl.querySelector('.copy-icon').innerHTML = checkSvg;
+                            setTimeout(function() {
+                                numEl.classList.remove('copied');
+                                numEl.querySelector('.copy-icon').innerHTML = copySvg;
+                            }, 1500);
+                        }
+                        function fallbackCopy(str, cb) {
+                            var ta = document.createElement('textarea');
+                            ta.value = str; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                            document.body.appendChild(ta); ta.select();
+                            try { document.execCommand('copy'); cb(); } catch(ex) {}
+                            document.body.removeChild(ta);
+                        }
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(onCopySuccess).catch(function() {
+                                fallbackCopy(text, onCopySuccess);
+                            });
+                        } else {
+                            fallbackCopy(text, onCopySuccess);
+                        }
+                    });
+                });
+
+
+
+                // Header watermark 鼠标跟随揭示
+                (function() {
+                    var header = document.querySelector('.header');
+                    var watermark = document.querySelector('.header-watermark');
+                    if (!header || !watermark) return;
+
+                    var radius = 100;
+
+                    header.addEventListener('mousemove', function(e) {
+                        var rect = watermark.getBoundingClientRect();
+                        var x = e.clientX - rect.left;
+                        var y = e.clientY - rect.top;
+                        var maskVal = 'radial-gradient(circle ' + radius + 'px at ' + x + 'px ' + y + 'px, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%)';
+                        watermark.style.webkitMaskImage = maskVal;
+                        watermark.style.maskImage = maskVal;
+                        watermark.style.color = 'rgba(255, 255, 255, 0.25)';
+                    });
+
+                    header.addEventListener('mouseleave', function() {
+                        watermark.style.webkitMaskImage = 'radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)';
+                        watermark.style.maskImage = 'radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)';
+                        watermark.style.color = 'rgba(255, 255, 255, 0.15)';
+                    });
+                })();
             });
         </script>
     </body>

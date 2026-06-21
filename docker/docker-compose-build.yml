@@ -16,10 +16,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       # Web 服务器
-      - ENABLE_WEBSERVER=${ENABLE_WEBSERVER:-false}
       - WEBSERVER_PORT=${WEBSERVER_PORT:-8080}
-      - WEBSERVER_WATCHDOG=${WEBSERVER_WATCHDOG:-true}
-      - WEBSERVER_WATCHDOG_INTERVAL=${WEBSERVER_WATCHDOG_INTERVAL:-60}
       # 通知渠道
       - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
@@ -68,7 +65,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:3333:3333"
+      - "${MCP_HOST:-127.0.0.1}:${MCP_PORT:-3333}:3333"
 
     volumes:
       - ../config:/app/config:ro
@@ -76,3 +73,4 @@ services:
 
     environment:
       - TZ=Asia/Shanghai
+      - MCP_PORT=${MCP_PORT:-3333}

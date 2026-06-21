@@ -11,8 +11,10 @@ Deploy in <strong>30 seconds</strong> — Say goodbye to endless scrolling, only
 [![GitHub Stars](https://img.shields.io/github/stars/sansan0/TrendRadar?style=flat-square&logo=github&color=yellow)](https://github.com/sansan0/TrendRadar/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/sansan0/TrendRadar?style=flat-square&logo=github&color=blue)](https://github.com/sansan0/TrendRadar/network/members)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v6.5.0-blue.svg)](https://github.com/sansan0/TrendRadar)
-[![MCP](https://img.shields.io/badge/MCP-v4.0.0-green.svg)](https://github.com/sansan0/TrendRadar)
+[![Version](https://img.shields.io/badge/version-v6.10.0-blue.svg)](https://github.com/sansan0/TrendRadar)
+[![MCP](https://img.shields.io/badge/MCP-v4.1.0-green.svg)](https://github.com/sansan0/TrendRadar)
+[![Docker Pulls](https://img.shields.io/docker/pulls/wantcat/trendradar?style=flat-square&logo=docker&logoColor=white&label=TrendRadar%20Pulls&color=2496ED)](https://hub.docker.com/r/wantcat/trendradar)
+[![Docker Pulls](https://img.shields.io/docker/pulls/wantcat/trendradar-mcp?style=flat-square&logo=docker&logoColor=white&label=MCP%20Pulls&color=2496ED)](https://hub.docker.com/r/wantcat/trendradar-mcp)
 [![RSS](https://img.shields.io/badge/RSS-Feed_Support-orange.svg?style=flat-square&logo=rss&logoColor=white)](https://github.com/sansan0/TrendRadar)
 [![AI Translation](https://img.shields.io/badge/AI-Multi--Language-purple.svg?style=flat-square)](https://github.com/sansan0/TrendRadar)
 
@@ -139,6 +141,8 @@ After communication, the author indicated no concerns about server pressure, but
 <div align="center">
 
 > **Sponsorship Open**
+>
+> Interested in sponsoring? Trigger the auto-reply in my WeChat Official Account to get my contact details
 
 </div>
 
@@ -172,6 +176,7 @@ This contributes to the sustainable maintenance of the project and the growth of
 
 * **GitHub Issues**: Best for specific technical issues. Please provide complete information (screenshots, error logs, etc.) to help locate the problem quickly.
 * **WeChat Official Account**: It is recommended to leave comments under relevant articles. If you need to ask questions in the background, **liking/recommending** the article first is the best "icebreaker," and I can feel your appreciation (´▽`ʃ♡ƪ).
+* **QQ Group**: Follow the WeChat Official Account and reply "**交流群**" to join. Whether you're an AI beginner or a seasoned developer, looking for help or sharing ideas, you're welcome here. The group is all about mutual help and brainstorming — please read the group announcement first; describe your issue clearly with screenshots, and fellow members will help when available. Community wisdom is often faster and more comprehensive than any single person 🤝
 
 > **Friendly Reminder**:
 > This project is for open-source sharing, not a commercial product. Treat the author as a friend, not customer service, for better communication efficiency!
@@ -192,20 +197,11 @@ This contributes to the sustainable maintenance of the project and the growth of
 - **Tip**: Check [Changelog] to understand specific [Features]
 
 
-### 2026/03/12 - v6.5.0
+### 2026/06/19 - v6.10.0
 
-- **AI Smart News Filtering**: No more manual keyword setup! Describe your interests in everyday language in `ai_interests.txt` (e.g., "I want AI and renewable energy news"), and AI automatically extracts tags, scores every headline, and only pushes what truly matters to you. If AI filtering encounters issues, it auto-falls back to keyword matching — push delivery never stops
-- **Per-Period Filter Strategy & Interests**: Each time period in Timeline can now independently choose its filtering method and what topics to focus on. For example: mornings use a "tech keyword list" for quick filtering, evenings switch to "finance AI interests" for in-depth AI filtering — same system, different content at different times
-- **AI Analysis Independent from Push Mode**: AI analysis scope can differ from push content. For example: push only delivers new items (avoiding repeated notifications), while AI analyzes the full day's news (capturing complete trends). Each time period can also set its own AI analysis mode
-- **AI Filter Token Savings**: Previously analyzed news won't be re-processed; when you edit your interests, AI auto-evaluates the change magnitude — minor tweaks only update affected tags, major changes trigger full reclassification
-- **Multi-File Config & Tag Isolation**: Custom keyword files go in `config/custom/keyword/`, AI interest files go in `config/custom/ai/` — tags from different files are fully isolated and independent
-- **AI Translation Precision Control**: Independently toggle translation for hotlist, RSS, and standalone sections; regions with display turned off are automatically skipped, saving tokens
-- **Remote Storage Batch Upload**: Multiple write operations are batched and submitted to cloud in one go, reducing API call count
-- **Per-Group Display Limit**: New `max_news_per_keyword` controls max items shown per keyword/tag group, preventing a single hot topic from filling the entire push
-- **Time Period Conflict Detection**: Overlapping time periods are automatically detected — system alerts you to fix the config, preventing unexpected behavior
-- Various bug fixes
-
-
+- **AI Translation Batch Processing**: Automatically splits large translation requests into batches, preventing single-request overflow failures
+- **Module Refactoring**: Split context.py and \_\_main\_\_.py, extracted AI filter pipeline into a standalone module for clearer responsibilities and easier maintenance
+- **Fixed Feishu Source Label Display**: Fixed source labels and AI standalone source overview being swallowed by CommonMark rendering in Feishu cards
 
 ### 2026/02/09 - mcp-v4.0.0
 
@@ -218,6 +214,48 @@ This contributes to the sustainable maintenance of the project and the growth of
 
 <details>
 <summary>👉 Click to expand: <strong>Historical Updates</strong></summary>
+
+### 2026/06/02 - v6.9.0
+
+- **Platform Domain Safety Validation**: New `expected_domain` config option validates returned data link domains — mismatched data is automatically discarded with a warning, effectively preventing link hijacking or data tampering
+- **Custom Platform API URL**: Support self-hosting newsnow and configuring `api_url` to use your own data source
+
+### 2026/05/23 - v6.8.0
+
+- **HTML Report Major Enhancement**: Added report metadata display (generation time, data sources, version), dark mode auto-adaptation, improved Tab bar interaction, and trend arrow visualization for a significantly better browser reading experience
+- **Version Check CDN Multi-Source Fallback**: Version check API now supports automatic fallback across GitHub → jsDelivr → Cloudflare CDN sources, ensuring reliable update notifications even in restricted network environments
+- **Display Region Toggles**: HTML reports and emails now properly respect `display.regions.ai_analysis` and `display.regions.standalone` switches — disabled regions are no longer rendered
+- **Export Button Fix**: Fixed dropdown menu icons disappearing after clicking the export button
+- **Markdown Export Fix**: Fixed JS newline character escaping error in HTML report Markdown export
+
+### 2026/05/15 - v6.7.0
+
+- **Markdown Export**: New Markdown option in the report export dropdown — generate structured text with clickable links, perfect for LLM processing and cross-platform sharing ([#1121](https://github.com/sansan0/TrendRadar/issues/1121))
+- **RSS GUID Deduplication**: RSS storage now supports GUID field with priority order guid > url, preventing duplicate entries caused by URL changes for the same article
+- **Empty Title Protection**: Full-chain fallback logic across parser, renderer, and translation backfill ensures items without titles still display properly
+- **Translation Quality Enhancement**: Translation prompt now enforces numbered-item ordering preservation; empty translation results no longer overwrite original titles
+
+### 2026/03/28 - v6.6.0
+
+- **HTML Report Browser Enhancement**: Open the HTML report in a browser to unlock widescreen layout, Tab navigation for keyword groups and standalone sections, real-time title search, and more — email clients still show the original narrow layout with zero regression
+- **Dark Mode**: One-click toggle for dark theme with automatic preference persistence, ideal for nighttime reading
+- **One-Click Copy**: Hover over a news number to copy the title and link instantly for quick sharing
+- **Export Optimization**: Full-page and segmented screenshots merged into a dropdown export button; screenshots auto-revert to clean layout
+- **Keyboard Shortcuts**: `W` widescreen toggle, `D` dark mode, `/` search, `?` view all shortcuts
+- **Reading Progress Bar**: Real-time reading progress displayed at the top of the page
+
+### 2026/03/12 - v6.5.0
+
+- **AI Smart News Filtering**: No more manual keyword setup! Describe your interests in everyday language in `ai_interests.txt` (e.g., "I want AI and renewable energy news"), and AI automatically extracts tags, scores every headline, and only pushes what truly matters to you. If AI filtering encounters issues, it auto-falls back to keyword matching — push delivery never stops
+- **Per-Period Filter Strategy & Interests**: Each time period in Timeline can now independently choose its filtering method and what topics to focus on. For example: mornings use a "tech keyword list" for quick filtering, evenings switch to "finance AI interests" for in-depth AI filtering — same system, different content at different times
+- **AI Analysis Independent from Push Mode**: AI analysis scope can differ from push content. For example: push only delivers new items (avoiding repeated notifications), while AI analyzes the full day's news (capturing complete trends). Each time period can also set its own AI analysis mode
+- **AI Filter Token Savings**: Previously analyzed news won't be re-processed; when you edit your interests, AI auto-evaluates the change magnitude — minor tweaks only update affected tags, major changes trigger full reclassification
+- **Multi-File Config & Tag Isolation**: Custom keyword files go in `config/custom/keyword/`, AI interest files go in `config/custom/ai/` — tags from different files are fully isolated and independent
+- **AI Translation Precision Control**: Independently toggle translation for hotlist, RSS, and standalone sections; regions with display turned off are automatically skipped, saving tokens
+- **Remote Storage Batch Upload**: Multiple write operations are batched and submitted to cloud in one go, reducing API call count
+- **Per-Group Display Limit**: New `max_news_per_keyword` controls max items shown per keyword/tag group, preventing a single hot topic from filling the entire push
+- **Time Period Conflict Detection**: Overlapping time periods are automatically detected — system alerts you to fix the config, preventing unexpected behavior
+- Various bug fixes
 
 ### 2026/02/09 - v6.0.0
 
@@ -1040,6 +1078,19 @@ ai_translation:
 
 > ⚠️ Some international media content may involve sensitive topics that AI models might refuse to translate. Please filter subscription sources based on your actual needs
 
+### **HTML Report Browser Enhancement** (v6.6.0 New)
+
+Open the pushed HTML report in a browser to unlock an enhanced experience (email clients are unaffected):
+
+- **Widescreen Mode**: Auto-switches to 1200px wide layout on desktop, making full use of screen space
+- **Tab Navigation**: Both keyword groups and standalone sections support Tab switching — no more endless scrolling
+- **Dark Mode**: One-click dark theme toggle with automatic preference persistence
+- **Live Search**: Press `/` to open the search box and instantly filter news titles
+- **One-Click Copy**: Hover over a news number to copy the title and link
+- **Keyboard Shortcuts**: `W` widescreen, `D` dark mode, `/` search, `?` view all shortcuts
+
+> 💡 All enhancements are built on progressive enhancement — email clients still show the original 600px layout with zero regression
+
 ### **Flexible Storage Architecture (v4.0.0 Major Update)**
 
 **Multi-Backend Support**:
@@ -1220,84 +1271,45 @@ Transform from "algorithm recommendation captivity" to "actively getting the inf
 <summary> <strong>👉 Click to expand: Feishu Bot</strong> (Message display is relatively friendly)</summary>
 <br>
 
+> **Note**: The original "Feishu BotBuilder" will be discontinued on June 30, 2026. Please use the **Custom Group Bot** method below. Existing BotBuilder webhook URLs will no longer work and need to be reconfigured.
+
 **Note**: If **AI Analysis** is enabled, Feishu push notifications may occasionally (approx. 5% probability) experience a few minutes of delay. This is likely due to the platform's internal compliance auditing for AI-generated content.
 
 **GitHub Secret Configuration (⚠️ Name must match exactly):**
 - **Name**: `FEISHU_WEBHOOK_URL` (Please copy and paste this name, do not type manually)
-- **Secret (Value)**: Your Feishu bot Webhook address (link starts with https://www.feishu.cn/flow/api/trigger-webhook/********)
-<br>
+- **Secret (Value)**: Your Feishu custom bot Webhook address (format: `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxx`)
 
-Two methods available, **Method 1** is simpler, **Method 2** is more complex (but stable push)
+**Configuration Steps:**
 
-Method 1 discovered and suggested by **ziventian**, thanks to them. Default is personal push, group push can be configured via [#97](https://github.com/sansan0/TrendRadar/issues/97)
+1. Enter the target group, click the **More** button at the top right of the group, and click **Settings**.
 
-**Method 1:**
+![Group Settings](_image/feishu-bot/step1-group-settings.png)
 
-> For some users, additional operations needed to avoid "System Error". Need to search for the bot on mobile and enable Feishu bot application (suggestion from community, can refer)
+2. In the **Settings** panel on the right, click **Group Bots**.
 
-1. Open in PC browser https://botbuilder.feishu.cn/home/my-command
+![Group Bots](_image/feishu-bot/step2-group-bot.png)
 
-2. Click "New Bot Command"
+3. In the **Group Bots** panel, click **Add Bot**.
 
-3. Click "Select Trigger", scroll down, click "Webhook Trigger"
+4. In the **Add Bot** dialog, find and click **Custom Bot**.
 
-4. Now you'll see "Webhook Address", copy this link to local notepad temporarily, continue with next steps
+![Select Custom Bot](_image/feishu-bot/step3-custom-bot.png)
 
-5. In "Parameters" put the following content, then click "Done"
+5. Set the custom bot's avatar, name (e.g., "TrendRadar Trending Monitor") and description, then click **Add**.
 
-```json
-{
-  "message_type": "text",
-  "content": {
-    "text": "{{Content}}"
-  }
-}
-```
+![Set Bot Info](_image/feishu-bot/step4-set-name.png)
 
-6. Click "Select Action" > "Send via Official Bot"
+6. Copy the custom bot's **webhook address**, and click **Done**.
 
-7. Message title fill "TrendRadar Trending Monitor"
+> ⚠️ Please keep this webhook address safe. Do not publish it on GitHub, blogs, or any publicly accessible websites to prevent unauthorized use.
 
-8. Most critical part, click + button, select "Webhook Trigger", then arrange as shown in image
+![Copy Webhook URL](_image/feishu-bot/step5-webhook-url.png)
 
-![Feishu Bot Config Example](_image/feishu.png)
+7. Configure the copied Webhook address in GitHub Secrets as `FEISHU_WEBHOOK_URL`.
 
-9. After configuration, put Webhook address from step 4 into GitHub Secrets `FEISHU_WEBHOOK_URL`
-
-<br>
-
-**Method 2:**
-
-1. Open in PC browser https://botbuilder.feishu.cn/home/my-app
-
-2. Click "New Bot Application"
-
-3. After entering the created application, click "Process Design" > "Create Process" > "Select Trigger"
-
-4. Scroll down, click "Webhook Trigger"
-
-5. Now you'll see "Webhook Address", copy this link to local notepad temporarily, continue with next steps
-
-6. In "Parameters" put the following content, then click "Done"
-
-```json
-{
-  "message_type": "text",
-  "content": {
-    "text": "{{Content}}"
-  }
-}
-```
-
-7. Click "Select Action" > "Send Feishu Message", check "Group Message", then click the input box below, click "Groups I Manage" (if no group, you can create one in Feishu app)
-
-8. Message title fill "TrendRadar Trending Monitor"
-
-9. Most critical part, click + button, select "Webhook Trigger", then arrange as shown in image
-
-![Feishu Bot Config Example](_image/feishu.png)
-
-10. After configuration, put Webhook address from step 5 into GitHub Secrets `FEISHU_WEBHOOK_URL`
+> 💡 After configuration, you can click the bot avatar next to the group name to enter the custom bot details page and manage its settings.
+>
+> 📖 Official documentation: [Custom Bot Guide](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot)
 
 </details>
 
@@ -2654,10 +2666,7 @@ current directory/
 
    | Environment Variable | Corresponding Config | Example Value | Description |
    |---------------------|---------------------|---------------|-------------|
-   | `ENABLE_WEBSERVER` | - | `true` / `false` | Auto-start web server |
    | `WEBSERVER_PORT` | - | `8080` | Web server port |
-   | `WEBSERVER_WATCHDOG` | - | `true` / `false` | Turn on "auto-recover web page service" (restarts it if it crashes) |
-   | `WEBSERVER_WATCHDOG_INTERVAL` | - | `60` | How often to check and auto-recover (seconds) |
    | `FEISHU_WEBHOOK_URL` | `notification.channels.feishu.webhook_url` | `https://...` | Feishu Webhook (multi-account use `;` separator) |
    | `AI_ANALYSIS_ENABLED` | `ai_analysis.enabled` | `true` / `false` | Enable AI analysis (v5.0.0 new) |
    | `AI_API_KEY` | `ai.api_key` | `sk-xxx...` | AI API Key (shared by ai_analysis and ai_translation) |
@@ -2818,13 +2827,11 @@ docker rm trendradar
 ```
 
 > 💡 **Web Server Notes**:
-> - After starting, access latest report at `http://localhost:8080`
+> - Auto-starts in cron mode, access latest report at `http://localhost:8080`
 > - Access historical reports via directory navigation (e.g., `http://localhost:8080/2025-xx-xx/`)
 > - Port can be configured in `.env` file with `WEBSERVER_PORT` parameter
-> - Auto-start: Set `ENABLE_WEBSERVER=true` in `.env`
-> - Auto-recover: `WEBSERVER_WATCHDOG=true` (default). It checks every `WEBSERVER_WATCHDOG_INTERVAL` seconds and restarts the web page service if needed
-> - `stop_webserver` means you manually turn off the web page service (command: `docker exec -it trendradar python manage.py stop_webserver`)
-> - "Auto restart" means the system turns that web page service back on automatically. If you stopped it manually and want it back, run `docker exec -it trendradar python manage.py start_webserver`
+> - Stop manually: `docker exec -it trendradar python manage.py stop_webserver`
+> - Start manually: `docker exec -it trendradar python manage.py start_webserver`
 > - Security: Static files only, limited to output directory, localhost binding only
 
 #### Data Persistence
