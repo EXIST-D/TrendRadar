@@ -423,7 +423,7 @@ presets:
       morning_brief:
         name: "早间科技速览"
         start: "08:00"
-        end: "09:00"
+        end: "10:00"
         push: true
         analyze: false
         report_mode: "current"
@@ -432,7 +432,7 @@ presets:
       midday_update:
         name: "午间动态更新"
         start: "12:00"
-        end: "13:00"
+        end: "14:00"
         push: true
         analyze: false
         report_mode: "current"
@@ -441,7 +441,7 @@ presets:
       github_weekly:
         name: "GitHub 周趋势专场"
         start: "18:00"
-        end: "19:00"
+        end: "20:00"
         push: true
         analyze: true
         report_mode: "daily"
@@ -451,7 +451,7 @@ presets:
       evening_summary:
         name: "晚间本日总结"
         start: "21:00"
-        end: "22:00"
+        end: "23:00"
         push: true
         analyze: true
         report_mode: "daily"
