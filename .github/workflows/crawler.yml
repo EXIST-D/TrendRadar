@@ -11,8 +11,11 @@ on:
     #   "30 0,4,13 * * *" → 北京时间 08:30 / 12:30 / 21:30
     #   "30 10 * * 0"     → 北京时间周日 18:30（GitHub 周趋势专场）
     #
-    - cron: "30 0,4,13 * * *"
-    - cron: "30 10 * * 0"
+    # Personal schedule with backup triggers inside each 2-hour push window.
+    # Beijing time: 08:37/09:37, 12:37/13:37, 21:37/22:37.
+    # Sunday GitHub weekly: 18:37/19:37.
+    - cron: "37 0,1,4,5,13,14 * * *"
+    - cron: "37 10,11 * * 0"
 
   workflow_dispatch:
 
